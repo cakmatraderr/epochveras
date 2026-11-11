@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend-only test of the new Pine Script indicators, done with Playwright at 1920x1080. Working: (1) The Göstergeler dialog lists all 8 indicators, each with a toggle and a gear. Toggling one off removes it from the legend and chart; toggling it on restores it. The state is saved to /api/settings/indicators and is kept after reload. (2) EMA settings: length1=50 makes the legend show 'EMA 50 200' and the line moves. Colour #ff00ff at 50% opacity is applied to the line and the legend (rgba 0.5). Width 4px is saved. 'Varsayılanlar' resets the values. (3) Legend values change when the crosshair moves. The hide and settings buttons appear on hover and work without creating drawings. (4) RDG: 'Kutu seç' starts pick mode with a hint. Two clicks set the corners; a yellow box with the RSI line inside appears and no drawing is created. The settings dialog fills in the corner fields. Display Zigzag and Show Pivot Labels add lines and HH/HL labels. (5) Pivbar colours candles green/red, and disabling it brings back the default colours. (6) EMAX draws its fill and arrows; SFP draws labels and lines; Trendlines draws lines. (7) The MTF SFP table is at top centre and the MTF pivot table at bottom right, both with 9px cells, and they hide when toggled off. (8) Switching between 1m, 5m and 1h and between AGTUSDT and BTCUSDT causes no console errors (only the expected Binance CORS errors). (9) Regression checks pass: trend drawing create, select, recolour and delete; the alarm plus button; selecting a watchlist row. One HIGH bug: the RDG box is shared by all symbols, so switching symbols badly squashes the price scale.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "RDG indicator (rdg.js / useIndicators syncSeries)", "issue": "The RDG corners (t1,p1,t2,p2) are global, not stored per symbol. After a box is picked on AGTUSDT (prices around 0.05) and the user switches to BTCUSDT 1h, the RSI-in-box line series is drawn at prices around 0.05. The price scale then autoscales from about -8,000 to 88,000, so the BTC candles become a flat line at the top. There is also a stray '0,1' price label, and the corner dots sit near 0. Reproduced in the btc1h screenshot. Fix: store the RDG box per symbol (e.g. values keyed by symbol), or skip the RDG output when the box price range does not overlap the symbol's price range. Also set autoscaleInfoProvider: () => null on the RDG line series so it never affects autoscale.", "selector": "[data-testid=legend-ind-rdg]", "priority": "HIGH"},
+      {"component": "useIndicatorSettings persistence", "issue": "Any change PUTs the whole indicators object. A second open tab or client with stale state therefore overwrites everything (last writer wins). This was seen during testing: another client running at the same time undid my toggle changes and my RDG pick within seconds. In a single-user setup this still affects multiple tabs. Suggestion: re-fetch on window focus, and/or PATCH only the indicator that changed.", "selector": "n/a", "priority": "MEDIUM"},
+      {"component": "IndicatorSettings RDG 'Varsayılanlar'", "issue": "The reset also sets the box corners t1/p1/t2/p2 to 0, so the user loses the picked box and RDG falls back to 'Kutu seç'. Consider keeping the Widget-group values when resetting.", "selector": "[data-testid=indicator-reset-btn]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Indicator settings dialog", "issues": ["The number and width selects stretch across almost the whole row (the w-36/w-20 classes seem to be overridden by .ev-input width:100%). Labels such as 'EMA 1 Uzunluğu' and 'EMA 1 kalınlık' wrap onto two lines. TradingView uses compact right-aligned fields."]},
+      {"screen": "RDG pick mode", "issues": ["The rdg-pick-hint banner (top centre) covers the top-centre MTF SFP table (30M/1H cells) while pick mode is active."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "HIGH: Make the RDG box symbol-aware (store per symbol, or hide when the price range does not match) and stop the RDG RSI series from taking part in price autoscale (autoscaleInfoProvider returning null).",
+    "MEDIUM: Prevent stale-tab overwrites of indicator settings (re-fetch on focus, or send per-indicator partial updates).",
+    "LOW: Keep the RDG corners when 'Varsayılanlar' is pressed; make the settings dialog inputs compact and stop the labels wrapping; move rdg-pick-hint so it does not cover the MTF SFP table."
+  ],
+  "critical_code_review_comments": [
+    "rdg.js computeRdg: the box applies to any symbol or timeframe; there is no check that the bars actually overlap the box price range.",
+    "useIndicators.syncSeries: indicator LineSeries use the main price scale with default autoscale, so any outlier indicator (RDG) distorts the chart.",
+    "useIndicatorSettings: the full-state PUT is debounced 500ms and never re-syncs from the server after the first load.",
+    "MtfTables: each of up to 10 timeframes fetches 500 klines every 30s, and the effect restarts on every change to the dependent settings. Acceptable, but adds load through the proxy fallback."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not requested)", "frontend": "93% (1 HIGH bug, everything else works)"},
+  "seed_data_creation": "No seed data. Temporary test data, all removed: one BTCUSDT trend drawing (deleted), one AGTUSDT trend drawing (deleted via the toolbar), and one BTCUSDT alert at 40757 (deleted). Indicator settings were changed during the tests and restored to the snapshot taken at the start: all enabled, defaults, original RDG corners t1=1794405960 p1=0.04105 t2=1794409560 p2=0.0597. I checked after the tests that the server matches this snapshot. Magnet and layout were also restored (AGTUSDT 1m, magnet on).",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Indicator state is in GET/PUT /api/settings/indicators (PUT body {value:{...}}). Snapshot it before testing and restore it afterwards. Another client was writing indicator settings during this run, so expect state to change under you. The RDG box corners originally existed for AGTUSDT around 17:06-18:06 on 11 Nov. To reproduce the HIGH bug, click watchlist-row-BTCUSDT with RDG enabled. Magnet is ON in the layout, so turn it off before testing drawing selection by clicking on the line. The alarm plus button sits about 128px left of the chart container's right edge at crosshair y.",
+  "rca of the issue": "RDG squash bug: computeRdg only checks that corners exist and then maps RSI (0-100) into [minP,maxP] taken from the stored corners. The corners are a single global setting. On another symbol, bars inside the box time range still produce points at the old symbol's prices. These are added to a LineSeries on the main 'right' price scale, so autoscale stretches to include ~0.05 alongside ~74,000. Steps: enable RDG with a box on AGTUSDT, then switch to BTCUSDT 1h. Fix: key the corners by symbol and give the RDG series autoscaleInfoProvider: () => null."
+}

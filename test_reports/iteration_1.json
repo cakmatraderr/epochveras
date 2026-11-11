@@ -1,0 +1,62 @@
+{
+  "summary": "Tested the backend (18 pytest tests, all passed) and the frontend end to end with Playwright at 1920x1080. Working: proxy, CRUD, watchlist, timeframes, legend, all drawing tools, ruler, magnet, alerts, panels/resizers, layout persistence after reload, indicators dialog. Two bugs found. (1) CRITICAL: the drawing selection toolbar does nothing. The colour swatches, width buttons and trash button deselect the drawing instead of acting on it. (2) MEDIUM: a started trend line gets saved when the user clicks any toolbar button outside the chart, ending at that click point.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/binance/{path}", "issue": "Network errors and timeouts from httpx are not caught, so the client gets an unhandled 500 instead of a clean 502/504."},
+      {"endpoint": "POST/PATCH /api/alerts", "issue": "No checks on direction/status values (any string is accepted)."},
+      {"endpoint": "/api/settings", "issue": "There is no DELETE endpoint, so test keys cannot be removed through the API."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Chart SelectionBar (drawing-toolbar)", "issue": "Colour swatches, width buttons and the trash button do nothing. Clicking a swatch made the toolbar disappear and the colour stayed #2962ff in the DB. Clicking drawing-delete-btn left the drawing in the DB. Cause: the capture-phase pointerdown listener on chart-container (useChartInteraction.onPointerDown) also receives clicks on the toolbar, which sits inside the chart pane. handleDown finds no drawing under the point, calls select(null), and the toolbar unmounts before the click event fires. Fix: return early in onPointerDown when e.target.closest('.ev-selbar') (and possibly '.ev-legend'). The Delete key works as a fallback.", "selector": "[data-testid=drawing-toolbar] button, [data-testid=drawing-delete-btn], [data-testid^=drawing-color-], [data-testid^=drawing-width-]", "priority": "HIGH"},
+      {"component": "Trend tool (useChartInteraction.onUp)", "issue": "Reproduced: start a trend line with one click, then click a left-toolbar button (e.g. tool-ruler). The line is saved with p2 at the toolbar position. Cause: onUp is a window listener and saves the draft whenever any pointerup is more than 8px from the first click, even outside the chart. Fix: only save on pointerup if the drag started in the chart (flag set in handleDown), and discard the draft when the tool changes.", "selector": "[data-testid=tool-trend]", "priority": "MEDIUM"},
+      {"component": "Legend during timeframe load", "issue": "While a new timeframe is loading, the legend shows the new label (e.g. 15m) with the old timeframe's OHLC values.", "selector": "[data-testid=legend-ohlc]", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Watchlist (narrow panel, user's saved sideW=260)", "issues": ["The columns add up to about 404px, so in a 260px panel the Funding column is hidden behind a horizontal scroll and long symbols like 1000PEPEUSDT are cut off.", "After searching, the body sometimes stays scrolled sideways, so symbols lose their first letters ('HUSDT' instead of 'ETHUSDT')."]},
+      {"screen": "Watchlist funding", "issues": ["Negative funding is shown with an ASCII '-' ('-0,1124%') while Change % uses a typographic '−'. The two should match."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_epochveras_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix the drawing selection toolbar: in useChartInteraction onPointerDown, skip events whose target is inside .ev-selbar so swatch, width and delete clicks are not handled as chart clicks.",
+    "Fix trend draft saving: only save on pointerup when the drag started in the chart; discard the draft when the tool changes or on outside clicks.",
+    "useLayout: on getSetting failure the code falls back to DEFAULT and then PUTs it 600ms later, which overwrites the user's saved layout after a temporary network error. Do not auto-save until a load has succeeded.",
+    "Optional: clear the legend (or show the new data) when the timeframe changes; catch httpx errors in the proxy; make negative funding use the same '−' as Change %."
+  ],
+  "critical_code_review_comments": [
+    "useChartInteraction.onPointerDown runs for every element inside chart-container, including the SelectionBar and legend. Overlay UI should be excluded.",
+    "onUp is registered on window and saves R.draft on any pointerup, even outside the chart.",
+    "useLayout's catch sets DEFAULT, which is then saved and can overwrite real user settings. The layout is one shared document, so the last tab to write wins; concurrent sessions overwrite each other's panel sizes.",
+    "useAlerts.add: if the price equals the last price, direction becomes 'up' and the alert fires immediately on the next tick.",
+    "Watchlist useMemo depends on Math.floor(Date.now()/5000), which is hacky; sorting is re-evaluated in render anyway.",
+    "Backend binance_proxy: uncaught httpx exceptions give a 500; the cache dict grows without limit for distinct kline keys (klines ttl=0, so only exchangeInfo/ticker/premium/fundingInfo are cached, which is fine)."
+  ],
+  "updated_files": ["/app/backend/tests/test_epochveras_api.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "about 90% (selection-toolbar actions broken, trend draft outside-click bug)"},
+  "seed_data_creation": "None kept. Every drawing and alert I created (by id) was deleted; the TEST_ settings key was removed via mongosh; the layout setting was put back to the user's snapshot. The real user was clearly active at the same time (layout changes, edits to drawing fcf50824, deletion of drawing ea0713f5 before any delete action by my scripts). I briefly restored ea0713f5 and then removed it again to keep the user's deletion. I did not touch fcf50824.",
+  "verified_working": [
+    "Proxy endpoints exchangeInfo/klines/ticker/premiumIndex/fundingInfo return 200; other paths return 404; bad symbol returns 400",
+    "Drawings PUT/GET/DELETE and clear by symbol; alerts POST/GET/PATCH/DELETE; settings GET/PUT",
+    "Splash screen, then the terminal; watchlist shows 565 perpetuals with price, %, K/M/B volume and funding like '0,0063% (8s)' / '(4s)' / '(1s)'",
+    "Sorting by pct (desc/asc), sym and qv; search 'eth' gives 8 rows; clicking a row switches chart, legend and top symbol",
+    "Timeframes 1m/5m/15m/30m/1s/4s/1G and the dropdown (2h shown as 2s); 6000 bars loaded (1d: 2622, the full history); scrolling left loads more (6000 to 7500)",
+    "Last 1d candle time shows 03:00 (UTC+3)",
+    "Legend A/Y/D/K changes as the crosshair moves",
+    "Trend, hray, long and short are created and saved; correct placement on 15m, 1h and 1m; they persist after reload",
+    "Click selection, Delete key deletion, Escape cancels a draft, magnet snaps to bar OHLC",
+    "Ruler box shows '602,4 (+0,82%) 32 çubuk, 8s 6dk'; the next click clears it and returns to the cursor tool",
+    "'+' circle at paneW-11; clicking it shows the 'Alarm kuruldu' toast, adds the alert to the panel, increments the strip count and draws an orange price line. Hovering the tag turns it red with an X; clicking it deletes the alert",
+    "Top Alarm dialog is pre-filled with the price ('73571,2'); creates alerts at 99999 and '88.888,5' (parsed as 88888.5); the panel delete button works",
+    "Alert trigger shows the 'Alarm tetiklendi' toast and the DB is updated to status triggered",
+    "Right strip toggles both panels; side-width-resizer 260 to 413px, side-height-resizer 240 to 362px, sym column 70 to 118px; all persist after reload",
+    "Indicators dialog opens with the empty state 'Henüz gösterge eklenmedi'"
+  ],
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Chart internals can be reached in Playwright through the React fiber: on [data-testid=chart-container], walk up to the Chart function component; its third hook's memoizedState.current is R (R.chart, R.series, R.bars, R.drawings, R.sel, R.draft, R.ruler, R.cross, R.plusHover, R.hoverAlarm). Use series.priceToCoordinate and timeScale().timeToCoordinate to place clicks (add the box offset of x+50, y+40 at 1920 width). Do not use the chart-loading detached wait right after load: during the splash that element does not exist, so the wait passes immediately. Wait for [data-testid=legend-ohlc] instead. The real user edits the same data concurrently: snapshot /api/settings/layout first and restore it at the end. Python urllib gets a 403 from the ingress; use page.request or curl.",
+  "rca of the issue": "Selection toolbar: Chart.jsx renders <SelectionBar> inside the wrap div, and useChartInteraction attaches pointerdown in the capture phase to wrap. The toolbar's coordinates are inside the pane, so handleDown runs: no drawing under the point → select(null) → setSelId(null) → the SelectionBar unmounts before its onClick fires. Repro: select a horizontal ray, click a colour swatch: the toolbar vanishes and the DB colour is unchanged. Fix: in onPointerDown, `if (e.target.closest('.ev-selbar')) return;`. Trend draft: onUp on window saves R.draft when the pointerup is more than 8px from the first click, even when the pointerup comes from clicking a toolbar button outside the chart."
+}
