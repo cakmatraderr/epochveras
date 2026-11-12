@@ -37,7 +37,7 @@ export const market = {
       ws.onclose = () => { 
         this.live = 'disconnected'; 
         this.notify();
-        setTimeout(() => this.init(), 3000); // Otomatik yeniden bağlanma
+        setTimeout(() => this.init(), 3000);
       };
     } catch (e) {
       this.live = 'error';
@@ -70,7 +70,6 @@ export async function fetchKlines(symbol, interval, startTime, limit = 500) {
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
     const data = await res.json();
     
-    // Binance kline formatı: [time, open, high, low, close, volume, ...]
     return data.map(d => ({
       time: Math.floor(d[0] / 1000),
       open: parseFloat(d[1]),
@@ -85,9 +84,13 @@ export async function fetchKlines(symbol, interval, startTime, limit = 500) {
   }
 }
 
+// Hata veren eksik fonksiyon eklendi:
+export async function loadHistory(symbol, interval, startTime, limit) {
+  return await fetchKlines(symbol, interval, startTime, limit);
+}
+
 export function subscribeKline(symbol, interval, cb) {
   let ws = null;
-  let timer = null;
   let stopped = false;
 
   const connectWs = () => {
@@ -121,7 +124,6 @@ export function subscribeKline(symbol, interval, cb) {
 
     ws.onclose = () => {
       if (stopped) return;
-      // WebSocket koparsa kısa bir süre sonra tekrar bağlanmayı dene
       setTimeout(connectWs, 2000);
     };
   };
@@ -131,6 +133,5 @@ export function subscribeKline(symbol, interval, cb) {
   return () => {
     stopped = true;
     if (ws) ws.close();
-    if (timer) clearInterval(timer);
   };
 }
