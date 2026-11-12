@@ -6,14 +6,19 @@ const DIRECT = 'https://fapi.binance.com/fapi/v1/';
 const WS = 'wss://fstream.binance.com';
 let direct = true;
 
-// Sekmeden geri dönüldüğünde mumlardaki boşluk ve donma sorununu önlemek için sayfa yenileme tetikleyicisi
+// Akıllı görünürlük kontrolü: Sekmede 1 dakikadan uzun süre kalınmadıkça yenileme yapmaz
 if (typeof document !== 'undefined') {
-  let wasHidden = false;
+  let hiddenTime = 0;
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
-      wasHidden = true;
-    } else if (wasHidden) {
-      window.location.reload();
+      hiddenTime = Date.now();
+    } else if (hiddenTime > 0) {
+      const elapsed = Date.now() - hiddenTime;
+      hiddenTime = 0;
+      // 1 dakikadan (60,000 ms) uzun ayrılışlarda sayfa yenilenir, kısa geçişlerde yenilenmez
+      if (elapsed > 60000) {
+        window.location.reload();
+      }
     }
   });
 }
