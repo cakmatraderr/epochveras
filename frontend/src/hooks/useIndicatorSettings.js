@@ -28,4 +28,21 @@ export function useIndicatorSettings() {
   }, []);
 
   useEffect(() => {
-    if (!ind || !loaded.
+    if (!ind || !loaded.current) return;
+    
+    // Eğer kullanıcı değişiklik yapıyorsa local'e ve backend'e debounce ile kaydet
+    clearTimeout(timer.current);
+    saving.current = true;
+    timer.current = setTimeout(() => {
+      api.putSetting('indicators', ind).finally(() => {
+        saving.current = false;
+      });
+    }, 400);
+  }, [ind]);
+
+  const toggle = (id, enabled) => setInd((s) => ({ ...s, [id]: { ...s[id], enabled } }));
+  const setValues = (id, patch) => setInd((s) => ({ ...s, [id]: { ...s[id], values: { ...s[id].values, ...patch } } }));
+  const reset = (id) => setInd((s) => ({ ...s, [id]: { ...s[id], values: { ...defaultsOf(id) } } }));
+
+  return [ind, toggle, setValues, reset];
+}
