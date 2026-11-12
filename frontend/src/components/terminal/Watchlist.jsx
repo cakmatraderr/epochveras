@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtPrice, fmtPct, fmtVol, fmtFunding } from '../../lib/format';
 import { useMarketTick } from '../../hooks/useMarketTick';
+import { useRef, useEffect } from 'react';
 
 const COLS = [
   { k: 'sym', l: 'Sembol' }, { k: 'last', l: 'Son' }, { k: 'pct', l: 'Değ%' }, { k: 'qv', l: '24s Hacim' }, { k: 'fund', l: 'Funding' },
 ];
-const ROW_H = 26;
 
 const sortVal = (s, k) => {
   if (k === 'sym') return s;
@@ -25,7 +25,7 @@ const Header = ({ widths, setWidths, sort, setSort }) => {
     window.addEventListener('pointerup', up);
   };
   return (
-    <div className="ev-wl-head" data-testid="watchlist-header">
+    <div className="ev-wl-head sticky top-0 bg-[#0c0d10] z-10" data-testid="watchlist-header">
       {COLS.map((c, i) => (
         <div key={c.k} className={`ev-wl-cell ${i ? 'r' : ''}`} style={{ width: widths[i] }}>
           <button type="button" data-testid={`watchlist-sort-${c.k}`} className="truncate hover:text-[#d1d4dc]"
@@ -39,13 +39,13 @@ const Header = ({ widths, setWidths, sort, setSort }) => {
   );
 };
 
-const Row = ({ s, widths, active, onPick, top }) => {
+const Row = ({ s, widths, active, onPick }) => {
   const t = market.tickers[s] || {};
   const info = market.info[s];
   const f = market.funding[s];
 
-  // Fiyat değişim animasyonu (Flash efekti) için state ve ref
-  const [flash, setFlash] = useState(null); // 'up' | 'down' | null
+  // Fiyat değişim animasyonu (Flash efekti)
+  const [flash, setFlash] = useState(null);
   const prevPriceRef = useRef(t.last);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ const Row = ({ s, widths, active, onPick, top }) => {
         setFlash('down');
       }
       if (t.last !== prevPriceRef.current) {
-        const timer = setTimeout(() => setFlash(null), 400); // 400ms sonra flash sıfırlanır
+        const timer = setTimeout(() => setFlash(null), 400);
         prevPriceRef.current = t.last;
         return () => clearTimeout(timer);
       }
@@ -64,10 +64,8 @@ const Row = ({ s, widths, active, onPick, top }) => {
     prevPriceRef.current = t.last;
   }, [t.last]);
 
-  // Yüzdelik renkleri
   const pc = t.pct > 0 ? 'text-[#089981]' : t.pct < 0 ? 'text-[#f23645]' : 'text-[#d1d4dc]';
 
-  // Anlık fiyat flash arka plan veya metin renkleri
   let flashStyle = '';
   if (flash === 'up') {
     flashStyle = 'bg-[#089981]/20 text-[#089981] transition-colors duration-200';
@@ -76,7 +74,7 @@ const Row = ({ s, widths, active, onPick, top }) => {
   }
 
   return (
-    <div className={`ev-wl-row ${active ? 'on' : ''}`} style={{ top }} onClick={() => onPick(s)} data-testid={`watchlist-row-${s}`}>
+    <div className={`ev-wl-row flex items-center h-[26px] ${active ? 'on' : ''}`} onClick={() => onPick(s)} data-testid={`watchlist-row-${s}`}>
       <div className="ev-wl-cell font-medium text-[#d1d4dc]" style={{ width: widths[0] }}>{s}</div>
       <div className={`ev-wl-cell r rounded px-1 transition-colors ${flashStyle}`} style={{ width: widths[1] }} data-testid={`wl-price-${s}`}>
         {fmtPrice(t.last, info?.precision)}
@@ -94,26 +92,14 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   useMarketTick(1000);
   const [q, setQ] = useState('');
   const [sort, setSort] = useState({ k: 'qv', dir: -1 });
-  const [scroll, setScroll] = useState(0);
-  const [h, setH] = useState(400);
-  const body = useRef(null);
-
-  useEffect(() => {
-    const ro = new ResizeObserver(() => body.current && setH(body.current.clientHeight));
-    if (body.current) ro.observe(body.current);
-    return () => ro.disconnect();
-  }, []);
 
   const list = market.symbols.filter((s) => s.includes(q.toUpperCase()));
   
-  // Sıralama performans için optimize edildi
   const rows = useMemo(() => [...list].sort((a, b) => {
     const va = sortVal(a, sort.k); const vb = sortVal(b, sort.k);
     return (va > vb ? 1 : va < vb ? -1 : 0) * sort.dir;
   }), [list, sort, market.tickers]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const from = Math.max(0, Math.floor(scroll / ROW_H) - 5);
-  const to = Math.min(rows.length, from + Math.ceil(h / ROW_H) + 10);
   const total = widths.reduce((a, b) => a + b, 0);
 
   return (
@@ -126,12 +112,12 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
         <Search size={14} className="absolute left-4 top-2 text-[#787b86]" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Sembol ara" className="ev-input pl-7" data-testid="watchlist-search-input" />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto" ref={body} onScroll={(e) => setScroll(e.currentTarget.scrollTop)} data-testid="watchlist-body">
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-auto" data-testid="watchlist-body">
         <div style={{ minWidth: total }}>
           <Header widths={widths} setWidths={setWidths} sort={sort} setSort={setSort} />
-          <div className="relative" style={{ height: rows.length * ROW_H }}>
-            {rows.slice(from, to).px ? null : rows.slice(from, to).map((s, i) => (
-              <Row key={s} s={s} widths={widths} active={s === symbol} onPick={onPick} top={(from + i) * ROW_H} />
+          <div>
+            {rows.map((s) => (
+              <Row key={s} s={s} widths={widths} active={s === symbol} onPick={onPick} />
             ))}
           </div>
         </div>
