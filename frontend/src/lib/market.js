@@ -6,23 +6,6 @@ const DIRECT = 'https://fapi.binance.com/fapi/v1/';
 const WS = 'wss://fstream.binance.com';
 let direct = true;
 
-// Akıllı görünürlük kontrolü: Sekmede 1 dakikadan uzun süre kalınmadıkça yenileme yapmaz
-if (typeof document !== 'undefined') {
-  let hiddenTime = 0;
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      hiddenTime = Date.now();
-    } else if (hiddenTime > 0) {
-      const elapsed = Date.now() - hiddenTime;
-      hiddenTime = 0;
-      // 1 dakikadan (60,000 ms) uzun ayrılışlarda sayfa yenilenir, kısa geçişlerde yenilenmez
-      if (elapsed > 60000) {
-        window.location.reload();
-      }
-    }
-  });
-}
-
 export async function bget(path, params = {}) {
   const qs = new URLSearchParams(params).toString();
   if (direct) {
