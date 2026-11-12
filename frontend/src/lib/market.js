@@ -132,19 +132,36 @@ class Market {
 
   connect() {
     let opened = false;
-    const ws = new WebSocket(`${WS}/stream?streams=!ticker@arr/!markPrice@arr@1s`);
-    const to = setTimeout(() => { if (!opened) ws.close(); }, 7000);
-    ws.onopen = () => { opened = true; this.live = 'ws'; this.emit(); };
-    ws.onmessage = (e) => {
-      const m = JSON.parse(e.data);
-      if (m.stream && m.stream.startsWith('!ticker')) this.applyTickers(m.data);
-      else if (m.data) this.applyPremium(m.data);
+    try {
+      const ws = new WebSocket(`${WS}/stream?streams=!ticker@arr/!markPrice@arr@1s`);
+      const to = setTimeout(() => { 
+        if (!opened) {
+          try { ws.close(); } catch {}
+          this.live = 'poll'; 
+          this.emit(); 
+        } 
+      }, 5000);
+
+      ws.onopen = () => { opened = true; this.live = 'ws'; this.emit(); };
+      ws.onmessage = (e) => {
+        const m = JSON.parse(e.data);
+        if (m.stream && m.stream.startsWith('!ticker')) this.applyTickers(m.data);
+        else if (m.data) this.applyPremium(m.data);
+        this.emit();
+      };
+      ws.onerror = () => {
+        this.live = 'poll';
+        this.emit();
+      };
+      ws.onclose = () => {
+        clearTimeout(to);
+        this.live = 'poll';
+        this.emit();
+      };
+    } catch {
+      this.live = 'poll';
       this.emit();
-    };
-    ws.onclose = () => {
-      clearTimeout(to);
-      if (opened) setTimeout(() => this.connect(), 3000);
-    };
+    }
   }
 
   startPollingFallback() {
@@ -167,24 +184,58 @@ export function subscribeKline(symbol, interval, cb) {
   let timer;
   let stopped = false;
   let opened = false;
+
   const poll = () => {
     const run = async () => {
       if (stopped) return;
-      try { (await fetchKlines(symbol, interval, undefined, 2)).forEach(cb); } catch { /* retry */ }
+      try { 
+        const klines = await fetchKlines(symbol, interval, undefined, 2);
+        klines.forEach(cb); 
+      } catch { /* retry */ }
     };
     run();
-    timer = setInterval(run, 1000);
+    if (!timer) timer = setInterval(run, 1000);
   };
-  if (market.live === 'poll') poll();
-  else {
-    ws = new WebSocket(`${WS}/ws/${symbol.toLowerCase()}@kline_${interval}`);
-    const to = setTimeout(() => { if (!opened) ws.close(); }, 7000);
-    ws.onopen = () => { opened = true; };
-    ws.onmessage = (e) => {
-      const k = JSON.parse(e.data).k;
-      cb({ time: k.t / 1000 + OFFSET, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v });
-    };
-    ws.onclose = () => { clearTimeout(to); if (!stopped) poll(); };
+
+  // Eğer WebSocket doğrudan bağlantı kuramıyorsa veya hata aldıysa anında polling (yedek akış) devreye girer
+  if (market.live === 'poll') {
+    poll();
+  } else {
+    try {
+      ws = new WebSocket(`${WS}/ws/${symbol.toLowerCase()}@kline_${interval}`);
+      const to = setTimeout(() => { 
+        if (!opened && !stopped) { 
+          try { ws.close(); } catch {}
+          poll(); 
+        } 
+      }, 5000);
+
+      ws.onopen = () => { opened = true; };
+      ws.onmessage = (e) => {
+        try {
+          const k = JSON.parse(e.data).k;
+          if (k) {
+            cb({ time: k.t / 1000 + OFFSET, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v });
+          }
+        } catch {}
+      };
+      ws.onerror = () => {
+        if (!stopped) poll();
+      };
+      ws.onclose = () => { 
+        clearTimeout(to); 
+        if (!stopped) poll(); 
+      };
+    } catch {
+      poll();
+    }
   }
-  return () => { stopped = true; if (ws) ws.close(); clearInterval(timer); };
+
+  return () => { 
+    stopped = true; 
+    if (ws) {
+      try { ws.close(); } catch {}
+    } 
+    if (timer) clearInterval(timer); 
+  };
 }
