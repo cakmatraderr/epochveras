@@ -18,19 +18,27 @@ const tAtFn = (bars) => (x) => {
   return x < 0 ? bars[0].time + x * iv : bars[n - 1].time + (x - n + 1) * iv;
 };
 
-// LonesomeBlue RSI trendlines (evaluated on the last bar)
+// LonesomeBlue RSI trendlines (TradingView uyumlu güncellenmiş mantık)
 function trendlines(rsi, ph, pl, v, tAt, uc, dc) {
   const n = rsi.length; const bi = n - 1; const { prd, PPnum } = v; const maxline = 20;
   const lastK = (arr, k) => {
     const out = [];
-    for (let i = n - 1; i >= 0 && out.length < k; i -= 1) if (arr[i]) out.push(i);
+    for (let i = n - 1; i >= 0 && out.length < k; i -= 1) if (arr[i] != null && !isNaN(arr[i])) out.push(i);
     return out;
   };
   const tp = lastK(ph, PPnum); const bp = lastK(pl, PPnum);
-  const val = (pos) => (pos == null ? 0 : (rsi[pos - prd] ?? 0));
+  
+  // TradingView ile birebir uyumlu pivot değer okuma
+  const val = (pos) => {
+    if (pos == null) return 0;
+    const idx = pos - prd;
+    return idx >= 0 && idx < rsi.length ? (rsi[idx] ?? 0) : (rsi[pos] ?? 0);
+  };
+
   const segs = [];
   const dash = v.linestylei === 'Dashed' ? [6, 4] : [];
   let cLo = 0; let cHi = 0;
+
   const scan = (positions, isLow) => {
     for (let p1 = 1; p1 <= PPnum - 1; p1 += 1) {
       let best = null;
@@ -41,30 +49,39 @@ function trendlines(rsi, ph, pl, v, tAt, uc, dc) {
           if (pos1 == null || pos2 == null) continue;
           const val1 = val(pos1); const val2 = val(pos2);
           if (isLow ? !(val1 > val2) : !(val1 < val2)) continue;
+          
           const diff = (isLow ? val1 - val2 : val2 - val1) / (pos1 - pos2);
           let hline = isLow ? val2 + diff : val2 - diff;
           let lloc = bi; let lval = rsi[bi]; let valid = true; let broken = false;
-          for (let x = pos2 + 1 - prd; x <= bi; x += 1) {
-            const r = x >= 0 ? (rsi[x] ?? 0) : 0;
-            if (isLow ? r < hline : r > hline) { valid = false; if (x + prd >= pos1) broken = true; break; }
-            lloc = x; lval = hline; hline = isLow ? hline + diff : hline - diff;
+          
+          for (let x = pos2 + 1; x <= bi; x += 1) {
+            const r = x >= 0 && x < rsi.length ? (rsi[x] ?? 0) : 0;
+            if (isLow ? r < hline : r > hline) { 
+              valid = false; 
+              if (x >= pos1) broken = true; 
+              break; 
+            }
+            lloc = x; 
+            lval = hline; 
+            hline = isLow ? hline + diff : hline - diff;
           }
           if (valid) { best = { v1: hline, v2: val2, x1: lloc, x2: pos2 }; break; }
+          
           const c = isLow ? cLo : cHi;
           if (v.showbroken && broken && c < maxline) {
             if (isLow) cLo += 1; else cHi += 1;
-            segs.push({ t1: tAt(pos2 - prd), p1: val2, t2: tAt(lloc), p2: lval, color: isLow ? dc : uc, width: 1, dash: [2, 3], extend: v.extendlines && isLow, pane: 1 });
+            segs.push({ t1: tAt(pos2), p1: val2, t2: tAt(lloc), p2: lval, color: isLow ? dc : uc, width: 1, dash: [2, 3], extend: v.extendlines && isLow, pane: 1 });
           }
         }
       }
       const c = isLow ? cLo : cHi;
       if (best && c < maxline) {
         if (isLow) cLo += 1; else cHi += 1;
-        segs.push({ t1: tAt(best.x2 - prd), p1: best.v2, t2: tAt(best.x1), p2: best.v1, color: isLow ? dc : uc, width: v.linewidth, dash, extend: v.extendlines, pane: 1 });
+        segs.push({ t1: tAt(best.x2), p1: best.v2, t2: tAt(best.x1), p2: best.v1, color: isLow ? dc : uc, width: v.linewidth, dash, extend: v.extendlines, pane: 1 });
       }
     }
   };
-  // Pine interleaves lows and highs per p1; counts are independent so order does not change output
+
   scan(bp, true);
   scan(tp, false);
   return segs;
@@ -81,16 +98,20 @@ export function computeCrsi(bars, v) {
   const uc = PINE_COLORS[v.line1_color] || PINE_COLORS.yellow;
   const dc = PINE_COLORS[v.line2_color] || PINE_COLORS.yellow;
   const segs = [];
+  
   if (v.showpivot) {
     for (let i = 0; i < bars.length; i += 1) {
-      if (ph[i]) segs.push({ t1: tAt(i - v.prd), p1: ph[i], t2: tAt(i - v.prd + 50), p2: ph[i], color: v.phColor, width: 2, pane: 1 });
-      if (pl[i]) segs.push({ t1: tAt(i - v.prd), p1: pl[i], t2: tAt(i - v.prd + 50), p2: pl[i], color: v.plColor, width: 2, pane: 1 });
+      if (ph[i] != null) segs.push({ t1: tAt(i - v.prd), p1: ph[i], t2: tAt(i - v.prd + 50), p2: ph[i], color: v.phColor, width: 2, pane: 1 });
+      if (pl[i] != null) segs.push({ t1: tAt(i - v.prd), p1: pl[i], t2: tAt(i - v.prd + 50), p2: pl[i], color: v.plColor, width: 2, pane: 1 });
     }
   }
+  
   if (bars.length > 2 * v.prd) segs.push(...trendlines(rsi, ph, pl, v, tAt, uc, dc));
+  
   const { h, l, c } = series(bars);
   const tr = bars.map((b, i) => (i === 0 ? h[i] - l[i] : Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1]))));
   const atr = rma(tr, v.ATRlength);
+
   return {
     pane: 1,
     lines: [
