@@ -182,35 +182,26 @@ export function subscribeKline(symbol, interval, cb) {
   let ws;
   let timer;
   let stopped = false;
-  let opened = false;
 
-  // Güçlendirilmiş ve kesintisiz çalışan polling fonksiyonu (Anlık hareket ve yeni mum için)
-  const poll = () => {
-    const run = async () => {
+  // Garanti çalışan, her saniye anlık veriyi çekip callback'e veren canlı akış motoru
+  const startLiveStream = () => {
+    const poll = async () => {
       if (stopped) return;
-      try { 
+      try {
         const klines = await fetchKlines(symbol, interval, undefined, 2);
         if (klines && klines.length > 0) {
+          // Son mumu ve bir önceki mumu grafiğe doğrudan besle
           klines.forEach(k => cb(k));
         }
       } catch {}
     };
-    run();
-    if (!timer) timer = setInterval(run, 1000); // Her 1 saniyede bir güncel mumu ve fiyatı çeker
+
+    poll();
+    timer = setInterval(poll, 1000);
   };
 
-  // Ağ kısıtlamalarına takılmamak ve akışın donmasını önlemek için WebSocket'i dener, 
-  // bağlantı kur alamazsa direkt polling mekanizmasını aktif eder.
   try {
     ws = new WebSocket(`${WS}/ws/${symbol.toLowerCase()}@kline_${interval}`);
-    const to = setTimeout(() => { 
-      if (!opened && !stopped) { 
-        try { ws.close(); } catch {}
-        poll(); 
-      } 
-    }, 4000);
-
-    ws.onopen = () => { opened = true; };
     ws.onmessage = (e) => {
       try {
         const message = JSON.parse(e.data);
@@ -228,15 +219,17 @@ export function subscribeKline(symbol, interval, cb) {
       } catch {}
     };
     ws.onerror = () => {
-      if (!stopped) poll();
+      if (!timer && !stopped) startLiveStream();
     };
-    ws.onclose = () => { 
-      clearTimeout(to); 
-      if (!stopped) poll(); 
+    ws.onclose = () => {
+      if (!timer && !stopped) startLiveStream();
     };
   } catch {
-    poll();
+    startLiveStream();
   }
+
+  // Her ihtimale karşı (WebSocket engellenmesi durumunda) doğrudan polling'i de arka planda tetikle
+  startLiveStream();
 
   return () => { 
     stopped = true; 
