@@ -6,6 +6,18 @@ const DIRECT = 'https://fapi.binance.com/fapi/v1/';
 const WS = 'wss://fstream.binance.com';
 let direct = true;
 
+// Sekmeden geri dönüldüğünde mumlardaki boşluk ve donma sorununu önlemek için sayfa yenileme tetikleyicisi
+if (typeof document !== 'undefined') {
+  let wasHidden = false;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      wasHidden = true;
+    } else if (wasHidden) {
+      window.location.reload();
+    }
+  });
+}
+
 export async function bget(path, params = {}) {
   const qs = new URLSearchParams(params).toString();
   if (direct) {
