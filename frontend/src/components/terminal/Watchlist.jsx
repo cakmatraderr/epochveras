@@ -44,8 +44,8 @@ const Row = ({ s, widths, active, onPick, top }) => {
   const info = market.info[s];
   const f = market.funding[s];
 
-  // Fiyat değişim animasyonu (Flash efekti) için state ve ref
-  const [flash, setFlash] = useState(null); // 'up' | 'down' | null
+  // Fiyat değişim animasyonu (Flash efekti)
+  const [flash, setFlash] = useState(null);
   const prevPriceRef = useRef(t.last);
 
   useEffect(() => {
@@ -56,7 +56,7 @@ const Row = ({ s, widths, active, onPick, top }) => {
         setFlash('down');
       }
       if (t.last !== prevPriceRef.current) {
-        const timer = setTimeout(() => setFlash(null), 400); // 400ms sonra flash sıfırlanır
+        const timer = setTimeout(() => setFlash(null), 400);
         prevPriceRef.current = t.last;
         return () => clearTimeout(timer);
       }
@@ -64,10 +64,8 @@ const Row = ({ s, widths, active, onPick, top }) => {
     prevPriceRef.current = t.last;
   }, [t.last]);
 
-  // Yüzdelik renkleri
   const pc = t.pct > 0 ? 'text-[#089981]' : t.pct < 0 ? 'text-[#f23645]' : 'text-[#d1d4dc]';
 
-  // Anlık fiyat flash arka plan veya metin renkleri
   let flashStyle = '';
   if (flash === 'up') {
     flashStyle = 'bg-[#089981]/20 text-[#089981] transition-colors duration-200';
@@ -106,7 +104,6 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
 
   const list = market.symbols.filter((s) => s.includes(q.toUpperCase()));
   
-  // Sıralama performans için optimize edildi
   const rows = useMemo(() => [...list].sort((a, b) => {
     const va = sortVal(a, sort.k); const vb = sortVal(b, sort.k);
     return (va > vb ? 1 : va < vb ? -1 : 0) * sort.dir;
@@ -130,7 +127,7 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
         <div style={{ minWidth: total }}>
           <Header widths={widths} setWidths={setWidths} sort={sort} setSort={setSort} />
           <div className="relative" style={{ height: rows.length * ROW_H }}>
-            {rows.slice(from, to).px ? null : rows.slice(from, to).map((s, i) => (
+            {rows.slice(from, to).map((s, i) => (
               <Row key={s} s={s} widths={widths} active={s === symbol} onPick={onPick} top={(from + i) * ROW_H} />
             ))}
           </div>
