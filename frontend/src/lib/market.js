@@ -15,7 +15,6 @@ if (typeof document !== 'undefined') {
     } else if (hiddenTime > 0) {
       const elapsed = Date.now() - hiddenTime;
       hiddenTime = 0;
-      // 1 dakikadan (60,000 ms) uzun ayrılışlarda sayfa yenilenir, kısa geçişlerde yenilenmez
       if (elapsed > 60000) {
         window.location.reload();
       }
@@ -144,10 +143,12 @@ class Market {
 
       ws.onopen = () => { opened = true; this.live = 'ws'; this.emit(); };
       ws.onmessage = (e) => {
-        const m = JSON.parse(e.data);
-        if (m.stream && m.stream.startsWith('!ticker')) this.applyTickers(m.data);
-        else if (m.data) this.applyPremium(m.data);
-        this.emit();
+        try {
+          const m = JSON.parse(e.data);
+          if (m.stream && m.stream.startsWith('!ticker')) this.applyTickers(m.data);
+          else if (m.data) this.applyPremium(m.data);
+          this.emit();
+        } catch {}
       };
       ws.onerror = () => {
         this.live = 'poll';
@@ -170,9 +171,7 @@ class Market {
         const tk = await bget('ticker/24hr');
         this.applyTickers(tk);
         this.emit();
-      } catch {
-        // yoksay
-      }
+      } catch {}
     }, 1000);
   }
 }
@@ -185,20 +184,23 @@ export function subscribeKline(symbol, interval, cb) {
   let stopped = false;
   let opened = false;
 
+  // Güçlendirilmiş ve kesintisiz çalışan polling fonksiyonu (Anlık hareket ve yeni mum için)
   const poll = () => {
     const run = async () => {
       if (stopped) return;
       try { 
-        const klines = await fetchKlines(symbol, interval, undefined, 1);
+        const klines = await fetchKlines(symbol, interval, undefined, 2);
         if (klines && klines.length > 0) {
-          cb(klines[klines.length - 1]);
+          klines.forEach(k => cb(k));
         }
-      } catch { /* retry */ }
+      } catch {}
     };
     run();
-    if (!timer) timer = setInterval(run, 1000);
+    if (!timer) timer = setInterval(run, 1000); // Her 1 saniyede bir güncel mumu ve fiyatı çeker
   };
 
+  // Ağ kısıtlamalarına takılmamak ve akışın donmasını önlemek için WebSocket'i dener, 
+  // bağlantı kur alamazsa direkt polling mekanizmasını aktif eder.
   try {
     ws = new WebSocket(`${WS}/ws/${symbol.toLowerCase()}@kline_${interval}`);
     const to = setTimeout(() => { 
@@ -206,13 +208,13 @@ export function subscribeKline(symbol, interval, cb) {
         try { ws.close(); } catch {}
         poll(); 
       } 
-    }, 5000);
+    }, 4000);
 
     ws.onopen = () => { opened = true; };
     ws.onmessage = (e) => {
       try {
         const message = JSON.parse(e.data);
-        const k = message.k || message.data?.k;
+        const k = message.k;
         if (k) {
           cb({ 
             time: k.t / 1000 + OFFSET, 
