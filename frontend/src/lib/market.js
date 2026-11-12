@@ -189,46 +189,51 @@ export function subscribeKline(symbol, interval, cb) {
     const run = async () => {
       if (stopped) return;
       try { 
-        const klines = await fetchKlines(symbol, interval, undefined, 2);
-        klines.forEach(cb); 
+        const klines = await fetchKlines(symbol, interval, undefined, 1);
+        if (klines && klines.length > 0) {
+          cb(klines[klines.length - 1]);
+        }
       } catch { /* retry */ }
     };
     run();
     if (!timer) timer = setInterval(run, 1000);
   };
 
-  // Eğer WebSocket doğrudan bağlantı kuramıyorsa veya hata aldıysa anında polling (yedek akış) devreye girer
-  if (market.live === 'poll') {
-    poll();
-  } else {
-    try {
-      ws = new WebSocket(`${WS}/ws/${symbol.toLowerCase()}@kline_${interval}`);
-      const to = setTimeout(() => { 
-        if (!opened && !stopped) { 
-          try { ws.close(); } catch {}
-          poll(); 
-        } 
-      }, 5000);
+  try {
+    ws = new WebSocket(`${WS}/ws/${symbol.toLowerCase()}@kline_${interval}`);
+    const to = setTimeout(() => { 
+      if (!opened && !stopped) { 
+        try { ws.close(); } catch {}
+        poll(); 
+      } 
+    }, 5000);
 
-      ws.onopen = () => { opened = true; };
-      ws.onmessage = (e) => {
-        try {
-          const k = JSON.parse(e.data).k;
-          if (k) {
-            cb({ time: k.t / 1000 + OFFSET, open: +k.o, high: +k.h, low: +k.l, close: +k.c, volume: +k.v });
-          }
-        } catch {}
-      };
-      ws.onerror = () => {
-        if (!stopped) poll();
-      };
-      ws.onclose = () => { 
-        clearTimeout(to); 
-        if (!stopped) poll(); 
-      };
-    } catch {
-      poll();
-    }
+    ws.onopen = () => { opened = true; };
+    ws.onmessage = (e) => {
+      try {
+        const message = JSON.parse(e.data);
+        const k = message.k || message.data?.k;
+        if (k) {
+          cb({ 
+            time: k.t / 1000 + OFFSET, 
+            open: +k.o, 
+            high: +k.h, 
+            low: +k.l, 
+            close: +k.c, 
+            volume: +k.v 
+          });
+        }
+      } catch {}
+    };
+    ws.onerror = () => {
+      if (!stopped) poll();
+    };
+    ws.onclose = () => { 
+      clearTimeout(to); 
+      if (!stopped) poll(); 
+    };
+  } catch {
+    poll();
   }
 
   return () => { 
