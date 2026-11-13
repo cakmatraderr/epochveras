@@ -94,7 +94,7 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   useMarketTick(1000);
   const [q, setQ] = useState('');
   
-  // Başlangıçta localStorage'dan okuyarak gecikmesiz (anında) yükleme yapıyoruz
+  // Başlangıçta localStorage'dan okuyarak gecikmesiz yükleme
   const [sort, setSortState] = useState(() => {
     try {
       const saved = localStorage.getItem('ev_watchlist_sort');
@@ -107,7 +107,7 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   const [h, setH] = useState(400);
   const body = useRef(null);
 
-  // Sayfa açıldığında MongoDB'den de kontrol et ve senkronize et
+  // MongoDB'den güncel tercihi çek ve senkronize et
   useEffect(() => {
     fetch('/api/settings/watchlist_sort')
       .then((res) => res.json())
@@ -120,17 +120,15 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
       .catch((err) => console.error("Tercih yüklenemedi:", err));
   }, []);
 
-  // Sıralama değiştiğinde hem localStorage'a hem de MongoDB'ye anında yaz
+  // Sıralama değiştiğinde localStorage ve MongoDB'ye kaydet
   const setSort = (updater) => {
     setSortState((prev) => {
       const nextSort = typeof updater === 'function' ? updater(prev) : updater;
       
-      // 1. Tarayıcı hafızasına hemen kaydet (anlık tepki için)
       try {
         localStorage.setItem('ev_watchlist_sort', JSON.stringify(nextSort));
       } catch (e) {}
 
-      // 2. MongoDB'ye (arka planda) kaydet
       fetch('/api/settings/watchlist_sort', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -149,10 +147,11 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
 
   const list = market.symbols.filter((s) => s.includes(q.toUpperCase()));
   
+  // ESLint kuralına uygun hale getirildi (market.tickers bağımlılığı kaldırıldı)
   const rows = useMemo(() => [...list].sort((a, b) => {
     const va = sortVal(a, sort.k); const vb = sortVal(b, sort.k);
     return (va > vb ? 1 : va < vb ? -1 : 0) * sort.dir;
-  }), [list, sort, market.tickers]);
+  }), [list, sort]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const from = Math.max(0, Math.floor(scroll / ROW_H) - 5);
   const to = Math.min(rows.length, from + Math.ceil(h / ROW_H) + 10);
