@@ -38,20 +38,24 @@ export const PaneLegend = ({ R, ind, outs, i, actions }) => {
   const d = INDICATORS.find((x) => x.id === 'crsi');
   const on = isOn(ind, d) && outs.crsi;
 
-  // 1. Başlangıçta localStorage'dan CRSI panel yüksekliğini yükle
+  // Sayfa yüklendiğinde veya coin değiştiğinde kaydedilmiş yüksekliği uygula
   useEffect(() => {
-    try {
-      const savedHeight = localStorage.getItem('ev_crsi_height');
-      if (savedHeight && R.chart && R.chart.panes && R.chart.panes()[1]) {
-        const pane = R.chart.panes()[1];
-        if (pane.setHeight) {
-          pane.setHeight(JSON.parse(savedHeight));
+    const applySavedHeight = () => {
+      try {
+        const saved = localStorage.getItem('ev_crsi_height');
+        if (saved && R.chart && R.chart.panes && R.chart.panes()[1]) {
+          const pane = R.chart.panes()[1];
+          if (pane.setHeight) pane.setHeight(JSON.parse(saved));
         }
-      }
-    } catch (e) {}
+      } catch (e) {}
+    };
+
+    applySavedHeight();
+    const timer = setTimeout(applySavedHeight, 100); // Grafik çizildikten sonra bir kez daha tetikle
+    return () => clearTimeout(timer);
   }, [R, on]);
 
-  // 2. MongoDB'den güncel yüksekliği çek ve panele uygula
+  // MongoDB'den kayıtlı yüksekliği çek ve uygula
   useEffect(() => {
     fetch('/api/settings/crsi_panel_height')
       .then((res) => res.json())
@@ -60,14 +64,37 @@ export const PaneLegend = ({ R, ind, outs, i, actions }) => {
           localStorage.setItem('ev_crsi_height', JSON.stringify(data.value));
           if (R.chart && R.chart.panes && R.chart.panes()[1]) {
             const pane = R.chart.panes()[1];
-            if (pane.setHeight) {
-              pane.setHeight(data.value);
-            }
+            if (pane.setHeight) pane.setHeight(data.value);
           }
         }
       })
-      .catch((err) => console.error("CRSI panel yüksekliği yüklenemedi:", err));
+      .catch((err) => {});
   }, [R]);
+
+  // Panel boyut değişimlerini (resize) takip edip kalıcı hale getir
+  useEffect(() => {
+    if (!R.chart || !R.chart.panes) return;
+    const pane = R.chart.panes()[1];
+    if (!pane || !pane.height) return;
+
+    let lastHeight = pane.height();
+    const interval = setInterval(() => {
+      try {
+        const currentHeight = pane.height();
+        if (currentHeight && currentHeight !== lastHeight) {
+          lastHeight = currentHeight;
+          localStorage.setItem('ev_crsi_height', JSON.stringify(currentHeight));
+          fetch('/api/settings/crsi_panel_height', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value: currentHeight }),
+          }).catch(() => {});
+        }
+      } catch (e) {}
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [R, on]);
 
   useEffect(() => {
     const t = setInterval(() => {
