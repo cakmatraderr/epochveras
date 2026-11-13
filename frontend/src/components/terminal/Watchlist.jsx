@@ -47,7 +47,6 @@ const Row = ({ s, widths, active, onPick, top }) => {
   const info = market.info[s];
   const f = market.funding[s];
 
-  // Fiyat değişim animasyonu (Flash efekti)
   const [flash, setFlash] = useState(null);
   const prevPriceRef = useRef(t.last);
 
@@ -94,34 +93,49 @@ const Row = ({ s, widths, active, onPick, top }) => {
 export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   useMarketTick(1000);
   const [q, setQ] = useState('');
-  const [sort, setSortState] = useState({ k: 'qv', dir: -1 });
+  
+  // Başlangıçta localStorage'dan okuyarak gecikmesiz (anında) yükleme yapıyoruz
+  const [sort, setSortState] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ev_watchlist_sort');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return { k: 'qv', dir: -1 };
+  });
+
   const [scroll, setScroll] = useState(0);
   const [h, setH] = useState(400);
   const body = useRef(null);
 
-  // 1. Sayfa ilk açıldığında MongoDB'den (backend settings üzerinden) kayıtlı sıralama tercihini çek
+  // Sayfa açıldığında MongoDB'den de kontrol et ve senkronize et
   useEffect(() => {
     fetch('/api/settings/watchlist_sort')
       .then((res) => res.json())
       .then((data) => {
         if (data && data.value) {
           setSortState(data.value);
+          localStorage.setItem('ev_watchlist_sort', JSON.stringify(data.value));
         }
       })
-      .catch((err) => console.error("Watchlist sıralama tercihi yüklenemedi:", err));
+      .catch((err) => console.error("Tercih yüklenemedi:", err));
   }, []);
 
-  // 2. Sıralama değiştiğinde hem state'i güncelle hem de MongoDB'ye (backend settings'e) kaydet
+  // Sıralama değiştiğinde hem localStorage'a hem de MongoDB'ye anında yaz
   const setSort = (updater) => {
     setSortState((prev) => {
       const nextSort = typeof updater === 'function' ? updater(prev) : updater;
       
-      // Backend'e kaydetme isteği at
+      // 1. Tarayıcı hafızasına hemen kaydet (anlık tepki için)
+      try {
+        localStorage.setItem('ev_watchlist_sort', JSON.stringify(nextSort));
+      } catch (e) {}
+
+      // 2. MongoDB'ye (arka planda) kaydet
       fetch('/api/settings/watchlist_sort', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: nextSort }),
-      }).catch((err) => console.error("Watchlist sıralama tercihi kaydedilemedi:", err));
+      }).catch((err) => console.error("Kayıt hatası:", err));
 
       return nextSort;
     });
@@ -138,7 +152,7 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   const rows = useMemo(() => [...list].sort((a, b) => {
     const va = sortVal(a, sort.k); const vb = sortVal(b, sort.k);
     return (va > vb ? 1 : va < vb ? -1 : 0) * sort.dir;
-  }), [list, sort, market.tickers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [list, sort, market.tickers]);
 
   const from = Math.max(0, Math.floor(scroll / ROW_H) - 5);
   const to = Math.min(rows.length, from + Math.ceil(h / ROW_H) + 10);
