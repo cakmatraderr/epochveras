@@ -42,9 +42,9 @@ export function useAlerts() {
         const triggered_at = new Date().toISOString();
         notify(a);
         
-        // State'i anında güncelleyerek bileşenin re-render almasını ve etiketin pasife düşmesini kesinleştiriyoruz
+        // Tüm objelerin referansını yenileyerek React'in arayüzü anında güncellemesini zorunlu kılıyoruz
         setAlerts((xs) => 
-          xs.map((x) => (x.id === a.id ? { ...x, status: 'triggered', triggered_at } : x))
+          xs.map((x) => (x.id === a.id ? { ...x, status: 'triggered', triggered_at } : { ...x }))
         );
         
         api.patchAlert(a.id, { status: 'triggered', triggered_at });
