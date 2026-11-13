@@ -106,7 +106,16 @@ export function useAlertLines(R, alerts, symbol) {
     tags.forEach((a) => {
       const ex = R.lines.get(a.id);
       if (ex) { ex.applyOptions({ price: a.price }); return; }
-      R.lines.set(a.id, R.series.createPriceLine({ price: a.price, color: '#ff9800', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '' }));
+      
+      // Çizgiyi gizleyip sadece eksen etiketini (axisLabelVisible: true) bırakıyoruz:
+      R.lines.set(a.id, R.series.createPriceLine({ 
+        price: a.price, 
+        color: 'transparent', // Çizgiyi şeffaf yapıyoruz
+        lineWidth: 1, 
+        lineStyle: LineStyle.Dashed, 
+        axisLabelVisible: true, // Sağdaki fiyat etiketi görünmeye devam eder
+        title: '' 
+      }));
     });
   }, [R, alerts, symbol]);
 }
