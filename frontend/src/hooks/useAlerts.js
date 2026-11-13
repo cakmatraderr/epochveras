@@ -7,18 +7,12 @@ import { fmtPrice } from '../lib/format';
 function beep() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    // Vuruş sayısını ve frekansı artırarak daha keskin ve uyarıcı hale getiriyoruz
-    [0, 0.15, 0.3, 0.45].forEach((d) => {
-      const o = ctx.createOscillator(); 
-      const g = ctx.createGain();
-      o.type = 'square'; // Daha keskin ve dijital bir ses dalgası (kare dalga)
-      o.frequency.value = 1200; // Daha yüksek, delici bir frekans
-      o.connect(g); 
-      g.connect(ctx.destination);
-      g.gain.setValueAtTime(0.3, ctx.currentTime + d);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + d + 0.12);
-      o.start(ctx.currentTime + d); 
-      o.stop(ctx.currentTime + d + 0.15);
+    [0, 0.25, 0.5].forEach((d) => {
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.frequency.value = 880; o.connect(g); g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.2, ctx.currentTime + d);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + d + 0.2);
+      o.start(ctx.currentTime + d); o.stop(ctx.currentTime + d + 0.22);
     });
   } catch { /* audio unavailable */ }
 }
@@ -47,7 +41,12 @@ export function useAlerts() {
         a.firing = true;
         const triggered_at = new Date().toISOString();
         notify(a);
-        setAlerts((xs) => xs.map((x) => (x.id === a.id ? { ...x, status: 'triggered', triggered_at } : x)));
+        
+        // State'i anında güncelleyerek bileşenin re-render almasını ve etiketin pasife düşmesini kesinleştiriyoruz
+        setAlerts((xs) => 
+          xs.map((x) => (x.id === a.id ? { ...x, status: 'triggered', triggered_at } : x))
+        );
+        
         api.patchAlert(a.id, { status: 'triggered', triggered_at });
       }
     });
