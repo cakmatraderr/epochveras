@@ -5,7 +5,6 @@ import { MainIndicatorLegend, PaneLegend } from './IndicatorLegend';
 import { MtfTables } from './MtfTables';
 import { useChartCore, useAlertLines } from '../../hooks/useChartCore';
 import { useChartInteraction } from '../../hooks/useChartInteraction';
-import { useLayout } from '../../hooks/useLayout';
 import { api } from '../../lib/api';
 import { fmtPrice, fmtPct, tfInfo } from '../../lib/format';
 
@@ -62,27 +61,13 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
   const [loading, setLoading] = useState(true);
   const [selId, setSelId] = useState(null);
   const [, bump] = useState(0);
-
-  // Layout ve CRSI panel boyutu yönetimi doğrudan güvenli şekilde bağlandı
-  const [layout, setLayout] = useLayout();
-
+  
   R.tool = tool;
   R.magnet = magnet;
 
-  useEffect(() => {
-    if (layout && layout.crsiH) {
-      R.crsiHeight = layout.crsiH;
-      if (R.chart && R.chart.panes && R.chart.panes()[1]) {
-        try {
-          R.chart.panes()[1].setHeight(layout.crsiH);
-        } catch (e) {}
-      }
-    }
-  }, [layout, R]);
-
   const [outs, setOuts] = useState({});
   useChartCore(R, symbol, tf, setLegend, setLoading);
-  useIndicators(R, ind, outs);
+  useIndicators(R, ind, setOuts);
   useAlertLines(R, alerts, symbol);
 
   useEffect(() => {
@@ -112,7 +97,7 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
       <Legend symbol={symbol} tf={tf} lg={legend} prec={R.prec}>
         <MainIndicatorLegend ind={ind} outs={outs} i={legend ? legend.i : null} prec={R.prec} actions={indActions} />
       </Legend>
-      <PaneLegend R={R} ind={ind} outs={outs} i={legend ? legend.i : null} actions={indActions} setLayout={setLayout} />
+      <PaneLegend R={R} ind={ind} outs={outs} i={legend ? legend.i : null} actions={indActions} />
       <MtfTables symbol={symbol} ind={ind} R={R} />
       {sel && <SelectionBar d={sel} onChange={change} onDelete={() => deleteDrawing(sel.id)} />}
       {loading && <div className="ev-loading" data-testid="chart-loading">Veriler yükleniyor…</div>}
