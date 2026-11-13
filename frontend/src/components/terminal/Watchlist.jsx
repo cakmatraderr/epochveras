@@ -29,7 +29,10 @@ const Header = ({ widths, setWidths, sort, setSort }) => {
       {COLS.map((c, i) => (
         <div key={c.k} className={`ev-wl-cell ${i ? 'r' : ''}`} style={{ width: widths[i] }}>
           <button type="button" data-testid={`watchlist-sort-${c.k}`} className="truncate hover:text-[#d1d4dc]"
-            onClick={() => setSort((s) => ({ k: c.k, dir: s.k === c.k ? -s.dir : (c.k === 'sym' ? 1 : -1) }))}>
+            onClick={() => {
+              const newSort = { k: c.k, dir: sort.k === c.k ? -sort.dir : (c.k === 'sym' ? 1 : -1) };
+              setSort(newSort);
+            }}>
             {c.l}{sort.k === c.k ? (sort.dir > 0 ? ' ↑' : ' ↓') : ''}
           </button>
           <span className="ev-col-resizer" data-testid={`watchlist-resize-${c.k}`} onPointerDown={(e) => startResize(i, e)} />
@@ -91,10 +94,38 @@ const Row = ({ s, widths, active, onPick, top }) => {
 export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   useMarketTick(1000);
   const [q, setQ] = useState('');
-  const [sort, setSort] = useState({ k: 'qv', dir: -1 });
+  const [sort, setSortState] = useState({ k: 'qv', dir: -1 });
   const [scroll, setScroll] = useState(0);
   const [h, setH] = useState(400);
   const body = useRef(null);
+
+  // 1. Sayfa ilk açıldığında MongoDB'den (backend settings üzerinden) kayıtlı sıralama tercihini çek
+  useEffect(() => {
+    fetch('/api/settings/watchlist_sort')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.value) {
+          setSortState(data.value);
+        }
+      })
+      .catch((err) => console.error("Watchlist sıralama tercihi yüklenemedi:", err));
+  }, []);
+
+  // 2. Sıralama değiştiğinde hem state'i güncelle hem de MongoDB'ye (backend settings'e) kaydet
+  const setSort = (updater) => {
+    setSortState((prev) => {
+      const nextSort = typeof updater === 'function' ? updater(prev) : updater;
+      
+      // Backend'e kaydetme isteği at
+      fetch('/api/settings/watchlist_sort', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: nextSort }),
+      }).catch((err) => console.error("Watchlist sıralama tercihi kaydedilemedi:", err));
+
+      return nextSort;
+    });
+  };
 
   useEffect(() => {
     const ro = new ResizeObserver(() => body.current && setH(body.current.clientHeight));
