@@ -53,7 +53,7 @@ const SelectionBar = ({ d, onChange, onDelete }) => (
   </div>
 );
 
-export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, onDeleteAlert, clearSignal, ind, indActions }) => {
+export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, onDeleteAlert, clearSignal, ind, indActions, layout, setLayout }) => {
   const wrap = useRef(null);
   const canvas = useRef(null);
   const R = useRef({ bars: [], drawings: [], iv: 60, prec: 2, tick: 0.01 }).current;
@@ -62,51 +62,24 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
   const [selId, setSelId] = useState(null);
   const [, bump] = useState(0);
 
-  // CRSI / Alt Gösterge Paneli Yükseklik Kalıcılığı (localStorage + MongoDB)
-  const [crsiHeight, setCrsiHeight] = useState(() => {
-    try {
-      const saved = localStorage.getItem('ev_crsi_height');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return 150; // Varsayılan panel yüksekliği
-  });
-
-  // Sayfa açıldığında MongoDB'den güncel yüksekliği çek
-  useEffect(() => {
-    fetch('/api/settings/crsi_panel_height')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.value != null) {
-          setCrsiHeight(data.value);
-          localStorage.setItem('ev_crsi_height', JSON.stringify(data.value));
-          R.crsiHeight = data.value; // Çizim motoruna aktar
-        }
-      })
-      .catch((err) => console.error("CRSI panel boyutu yüklenemedi:", err));
-  }, [R]);
-
-  // Yükseklik değiştiğinde hem localStorage'a hem de MongoDB'ye kaydet
-  const handleCrsiHeightChange = (newHeight) => {
-    setCrsiHeight(newHeight);
-    R.crsiHeight = newHeight;
-    try {
-      localStorage.setItem('ev_crsi_height', JSON.stringify(newHeight));
-    } catch (e) {}
-
-    fetch('/api/settings/crsi_panel_height', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: newHeight }),
-    }).catch((err) => console.error("CRSI panel boyutu kaydedilemedi:", err));
-  };
-
   R.tool = tool;
   R.magnet = magnet;
-  R.crsiHeight = crsiHeight;
+
+  // Layout içindeki crsiH değerini grafik motoruna ve panele senkronize et
+  useEffect(() => {
+    if (layout && layout.crsiH) {
+      R.crsiHeight = layout.crsiH;
+      if (R.chart && R.chart.panes && R.chart.panes()[1]) {
+        try {
+          R.chart.panes()[1].setHeight(layout.crsiH);
+        } catch (e) {}
+      }
+    }
+  }, [layout, R]);
 
   const [outs, setOuts] = useState({});
   useChartCore(R, symbol, tf, setLegend, setLoading);
-  useIndicators(R, ind, setOuts);
+  useIndicators(R, ind, outs);
   useAlertLines(R, alerts, symbol);
 
   useEffect(() => {
@@ -136,7 +109,7 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
       <Legend symbol={symbol} tf={tf} lg={legend} prec={R.prec}>
         <MainIndicatorLegend ind={ind} outs={outs} i={legend ? legend.i : null} prec={R.prec} actions={indActions} />
       </Legend>
-      <PaneLegend R={R} ind={ind} outs={outs} i={legend ? legend.i : null} actions={indActions} onHeightChange={handleCrsiHeightChange} />
+      <PaneLegend R={R} ind={ind} outs={outs} i={legend ? legend.i : null} actions={indActions} setLayout={setLayout} />
       <MtfTables symbol={symbol} ind={ind} R={R} />
       {sel && <SelectionBar d={sel} onChange={change} onDelete={() => deleteDrawing(sel.id)} />}
       {loading && <div className="ev-loading" data-testid="chart-loading">Veriler yükleniyor…</div>}
