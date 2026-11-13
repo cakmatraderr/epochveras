@@ -5,6 +5,7 @@ import { MainIndicatorLegend, PaneLegend } from './IndicatorLegend';
 import { MtfTables } from './MtfTables';
 import { useChartCore, useAlertLines } from '../../hooks/useChartCore';
 import { useChartInteraction } from '../../hooks/useChartInteraction';
+import { useLayout } from '../../hooks/useLayout';
 import { api } from '../../lib/api';
 import { fmtPrice, fmtPct, tfInfo } from '../../lib/format';
 
@@ -53,7 +54,7 @@ const SelectionBar = ({ d, onChange, onDelete }) => (
   </div>
 );
 
-export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, onDeleteAlert, clearSignal, ind, indActions, layout, setLayout }) => {
+export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, onDeleteAlert, clearSignal, ind, indActions }) => {
   const wrap = useRef(null);
   const canvas = useRef(null);
   const R = useRef({ bars: [], drawings: [], iv: 60, prec: 2, tick: 0.01 }).current;
@@ -62,10 +63,12 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
   const [selId, setSelId] = useState(null);
   const [, bump] = useState(0);
 
+  // Layout ve CRSI panel boyutu yönetimi doğrudan güvenli şekilde bağlandı
+  const [layout, setLayout] = useLayout();
+
   R.tool = tool;
   R.magnet = magnet;
 
-  // Layout içindeki crsiH değerini grafik motoruna ve panele senkronize et
   useEffect(() => {
     if (layout && layout.crsiH) {
       R.crsiHeight = layout.crsiH;
