@@ -176,9 +176,15 @@ async def put_setting(key: str, s: SettingIn):
     return {"key": key, "value": s.value}
 
 
-@api.get("/")
+@app.get("/")
 async def root():
     return {"message": "Epochveras API"}
+
+
+# Keep-alive ping endpoint (bot korumasına takılmadan Render'ı uykudan uyandırmak için)
+@app.get("/ping")
+async def ping():
+    return {"status": "alive"}
 
 
 app.include_router(api)
