@@ -12,6 +12,7 @@ import { LeftToolbar } from './components/terminal/LeftToolbar';
 import { RightStrip } from './components/terminal/RightStrip';
 import { Watchlist } from './components/terminal/Watchlist';
 import { AlertsPanel } from './components/terminal/AlertsPanel';
+import { FuturesPanel } from './components/terminal/FuturesPanel';
 import { IndicatorsDialog } from './components/terminal/IndicatorsDialog';
 import { IndicatorSettings } from './components/terminal/IndicatorSettings';
 import { useIndicatorSettings } from './hooks/useIndicatorSettings';
@@ -21,18 +22,29 @@ import { AlertDialog } from './components/terminal/AlertDialog';
 const SidePanels = ({ L, set, alertsApi, pickSymbol }) => {
   const dragW = useDrag((dx) => set((l) => ({ sideW: Math.min(1100, Math.max(260, l.sideW - dx)) })));
   const dragH = useDrag((dx, dy) => set((l) => ({ alH: Math.min(window.innerHeight - 160, Math.max(100, l.alH - dy)) })));
-  if (!L.wlOpen && !L.alOpen) return null;
+  
+  if (!L.wlOpen && !L.alOpen && !L.futOpen) return null;
+
   return (
     <div className="ev-side" style={{ width: L.sideW }} data-testid="side-panels">
       <div className="ev-vresizer" onPointerDown={dragW} data-testid="side-width-resizer" />
+      
       {L.wlOpen && (
         <div className="min-h-0 flex-1">
           <Watchlist symbol={L.symbol} onPick={pickSymbol} widths={L.cols} setWidths={(cols) => set({ cols })} onClose={() => set({ wlOpen: false })} />
         </div>
       )}
-      {L.wlOpen && L.alOpen && <div className="ev-hresizer" onPointerDown={dragH} data-testid="side-height-resizer" />}
+
+      {L.futOpen && (
+        <div className="min-h-0 flex-1 border-t border-[#2a2e39]">
+          <FuturesPanel symbol={L.symbol} onClose={() => set({ futOpen: false })} />
+        </div>
+      )}
+
+      {((L.wlOpen || L.futOpen) && L.alOpen) && <div className="ev-hresizer" onPointerDown={dragH} data-testid="side-height-resizer" />}
+
       {L.alOpen && (
-        <div className={L.wlOpen ? 'shrink-0' : 'min-h-0 flex-1'} style={L.wlOpen ? { height: L.alH } : undefined}>
+        <div className={(L.wlOpen || L.futOpen) ? 'shrink-0 border-t border-[#2a2e39]' : 'min-h-0 flex-1'} style={(L.wlOpen || L.futOpen) ? { height: L.alH } : undefined}>
           <AlertsPanel alerts={alertsApi.alerts} onDelete={alertsApi.remove} onPick={pickSymbol} onRearm={alertsApi.rearm}
             onClearTriggered={alertsApi.clearTriggered} onClose={() => set({ alOpen: false })} />
         </div>
@@ -59,11 +71,13 @@ function Terminal({ L, set, indApi }) {
   const [clearSignal, setClearSignal] = useState(0);
   const pickSymbol = useCallback((s) => set({ symbol: s }), [set]);
   const addAlert = useCallback((p) => alertsApi.add(L.symbol, p), [alertsApi, L.symbol]);
+  
   const clear = async () => {
     if (!window.confirm(`${L.symbol} üzerindeki tüm çizimler silinsin mi?`)) return;
     await api.clearDrawings(L.symbol);
     setClearSignal((n) => n + 1);
   };
+  
   const activeCount = alertsApi.alerts.filter((a) => a.status === 'active').length;
 
   return (
@@ -77,8 +91,16 @@ function Terminal({ L, set, indApi }) {
             onAddAlert={addAlert} onDeleteAlert={alertsApi.remove} clearSignal={clearSignal} ind={ind} indActions={indActions} />
         </div>
         <SidePanels L={L} set={set} alertsApi={alertsApi} pickSymbol={pickSymbol} />
-        <RightStrip wlOpen={L.wlOpen} alOpen={L.alOpen} toggleWl={() => set((l) => ({ wlOpen: !l.wlOpen }))}
-          toggleAl={() => set((l) => ({ alOpen: !l.alOpen }))} activeCount={activeCount} />
+        
+        <RightStrip 
+          wlOpen={L.wlOpen} 
+          alOpen={L.alOpen} 
+          futOpen={L.futOpen}
+          toggleWl={() => set((l) => ({ wlOpen: !l.wlOpen }))}
+          toggleAl={() => set((l) => ({ alOpen: !l.alOpen }))} 
+          toggleFut={() => set((l) => ({ futOpen: !l.futOpen }))}
+          activeCount={activeCount} 
+        />
       </div>
       <IndicatorsDialog open={indOpen} onOpenChange={setIndOpen} ind={ind} onToggle={indActions.toggle} onSettings={(id) => { setIndOpen(false); setSettingsId(id); }} />
       {settingsId && (
