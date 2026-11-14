@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, BarChart2, List } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtPrice, fmtPct, fmtVol, fmtFunding } from '../../lib/format';
 import { useMarketTick } from '../../hooks/useMarketTick';
@@ -90,11 +90,104 @@ const Row = ({ s, widths, active, onPick, top }) => {
   );
 };
 
+const FuturesDataView = ({ symbol }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!symbol) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    Promise.all([
+      fetch(`/api/binance/openInterest?symbol=${symbol}`).then((r) => {
+        if (!r.ok) throw new Error('OI verisi alınamadı');
+        return r.json();
+      }),
+      fetch(`/api/binance/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`).then((r) => {
+        if (!r.ok) throw new Error('L/S verisi alınamadı');
+        return r.json();
+      })
+    ])
+      .then(([oiData, lsArr]) => {
+        if (cancelled) return;
+        const ls = Array.isArray(lsArr) && lsArr.length > 0 ? lsArr[0] : {};
+        const longAcc = parseFloat(ls.longAccount || 0.5);
+        const shortAcc = parseFloat(ls.shortAccount || 0.5);
+        const lastPrice = market.tickers[symbol]?.last || 0;
+        const oiCoin = parseFloat(oiData.openInterest || 0);
+
+        setData({
+          oiCoin,
+          oiUsdt: lastPrice ? oiCoin * lastPrice : null,
+          longPct: (longAcc * 100).toFixed(1),
+          shortPct: (shortAcc * 100).toFixed(1),
+          ratio: parseFloat(ls.longShortRatio || 1).toFixed(2),
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [symbol]);
+
+  return (
+    <div className="p-3 space-y-3 text-xs text-[#d1d4dc] overflow-auto flex-1">
+      <div className="flex items-center justify-between border-b border-[#2a2e39] pb-2">
+        <span className="font-semibold text-sm">{symbol} Vadeli Verileri</span>
+        <span className="text-[11px] text-[#787b86]">5dk Periyot</span>
+      </div>
+
+      {loading && <div className="text-[#787b86] py-4 text-center">Veriler çekiliyor...</div>}
+      {error && <div className="text-[#f23645] py-4 text-center">{error}</div>}
+
+      {!loading && !error && data && (
+        <div className="space-y-4">
+          <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-2.5 space-y-1.5">
+            <div className="text-[#787b86] text-[11px]">Açık Pozisyon (Open Interest)</div>
+            <div className="font-mono text-sm font-semibold">
+              {data.oiCoin.toLocaleString('en-US', { maximumFractionDigits: 2 })} <span className="text-xs font-normal text-[#787b86]">{symbol.replace('USDT', '')}</span>
+            </div>
+            {data.oiUsdt && (
+              <div className="font-mono text-xs text-[#787b86]">
+                ≈ ${fmtVol(data.oiUsdt)}
+              </div>
+            )}
+          </div>
+
+          <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-2.5 space-y-2">
+            <div className="flex justify-between items-center">
+              <span className="text-[#787b86] text-[11px]">Long / Short Oranı</span>
+              <span className="font-mono font-semibold text-[#d1d4dc]">{data.ratio}</span>
+            </div>
+
+            <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
+              <div style={{ width: `${data.longPct}%` }} className="bg-[#089981] h-full transition-all duration-300" />
+              <div style={{ width: `${data.shortPct}%` }} className="bg-[#f23645] h-full transition-all duration-300" />
+            </div>
+
+            <div className="flex justify-between font-mono text-[11px]">
+              <span className="text-[#089981]">Long %{data.longPct}</span>
+              <span className="text-[#f23645]">Short %{data.shortPct}</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   useMarketTick(1000);
   const [q, setQ] = useState('');
-  
-  // Başlangıçta localStorage'dan okuyarak gecikmesiz yükleme
+  const [tab, setTab] = useState('watchlist'); // 'watchlist' | 'futures'
+
   const [sort, setSortState] = useState(() => {
     try {
       const saved = localStorage.getItem('ev_watchlist_sort');
@@ -107,7 +200,6 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   const [h, setH] = useState(400);
   const body = useRef(null);
 
-  // MongoDB'den güncel tercihi çek ve senkronize et
   useEffect(() => {
     fetch('/api/settings/watchlist_sort')
       .then((res) => res.json())
@@ -120,11 +212,10 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
       .catch((err) => console.error("Tercih yüklenemedi:", err));
   }, []);
 
-  // Sıralama değiştiğinde localStorage ve MongoDB'ye kaydet
   const setSort = (updater) => {
     setSortState((prev) => {
       const nextSort = typeof updater === 'function' ? updater(prev) : updater;
-      
+
       try {
         localStorage.setItem('ev_watchlist_sort', JSON.stringify(nextSort));
       } catch (e) {}
@@ -143,11 +234,10 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
     const ro = new ResizeObserver(() => body.current && setH(body.current.clientHeight));
     if (body.current) ro.observe(body.current);
     return () => ro.disconnect();
-  }, []);
+  }, [tab]);
 
   const list = market.symbols.filter((s) => s.includes(q.toUpperCase()));
-  
-  // ESLint kuralına uygun hale getirildi (market.tickers bağımlılığı kaldırıldı)
+
   const rows = useMemo(() => [...list].sort((a, b) => {
     const va = sortVal(a, sort.k); const vb = sortVal(b, sort.k);
     return (va > vb ? 1 : va < vb ? -1 : 0) * sort.dir;
@@ -159,24 +249,52 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
 
   return (
     <div className="ev-panel flex h-full flex-col" data-testid="watchlist-panel">
-      <div className="ev-panel-title">
-        <span>İzleme Listesi <span className="text-[#787b86]">({rows.length})</span></span>
+      <div className="ev-panel-title flex items-center justify-between gap-1">
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setTab('watchlist')}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+              tab === 'watchlist' ? 'bg-[#2a2e39] text-[#d1d4dc] font-medium' : 'text-[#787b86] hover:text-[#d1d4dc]'
+            }`}
+          >
+            <List size={13} />
+            <span>Liste ({rows.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('futures')}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors ${
+              tab === 'futures' ? 'bg-[#2a2e39] text-[#d1d4dc] font-medium' : 'text-[#787b86] hover:text-[#d1d4dc]'
+            }`}
+          >
+            <BarChart2 size={13} />
+            <span>Futures Data</span>
+          </button>
+        </div>
         <button type="button" className="ev-iconbtn" onClick={onClose} data-testid="watchlist-close-btn"><X size={16} /></button>
       </div>
-      <div className="relative px-2 pb-2">
-        <Search size={14} className="absolute left-4 top-2 text-[#787b86]" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Sembol ara" className="ev-input pl-7" data-testid="watchlist-search-input" />
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto" ref={body} onScroll={(e) => setScroll(e.currentTarget.scrollTop)} data-testid="watchlist-body">
-        <div style={{ minWidth: total }}>
-          <Header widths={widths} setWidths={setWidths} sort={sort} setSort={setSort} />
-          <div className="relative" style={{ height: rows.length * ROW_H }}>
-            {rows.slice(from, to).map((s, i) => (
-              <Row key={s} s={s} widths={widths} active={s === symbol} onPick={onPick} top={(from + i) * ROW_H} />
-            ))}
+
+      {tab === 'watchlist' ? (
+        <>
+          <div className="relative px-2 pb-2">
+            <Search size={14} className="absolute left-4 top-2 text-[#787b86]" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Sembol ara" className="ev-input pl-7" data-testid="watchlist-search-input" />
           </div>
-        </div>
-      </div>
+          <div className="min-h-0 flex-1 overflow-auto" ref={body} onScroll={(e) => setScroll(e.currentTarget.scrollTop)} data-testid="watchlist-body">
+            <div style={{ minWidth: total }}>
+              <Header widths={widths} setWidths={setWidths} sort={sort} setSort={setSort} />
+              <div className="relative" style={{ height: rows.length * ROW_H }}>
+                {rows.slice(from, to).map((s, i) => (
+                  <Row key={s} s={s} widths={widths} active={s === symbol} onPick={onPick} top={(from + i) * ROW_H} />
+                ))}
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <FuturesDataView symbol={symbol} />
+      )}
     </div>
   );
 };
