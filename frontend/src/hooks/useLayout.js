@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api';
 
 const DEFAULT = {
-  symbol: 'BTCUSDT', tf: '15m', wlOpen: true, alOpen: true, futOpen: false, sideW: 470, alH: 240, crsiH: 150, cols: [112, 96, 66, 78, 112], magnet: false,
+  symbol: 'BTCUSDT', tf: '15m', wlOpen: true, alOpen: true, sideW: 470, alH: 240, crsiH: 150, cols: [112, 96, 66, 78, 112], magnet: false,
 };
 
 export function useLayout() {
