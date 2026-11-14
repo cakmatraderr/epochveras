@@ -46,13 +46,17 @@ const Row = ({ s, widths, active, onPick, top }) => {
   const t = market.tickers[s] || {};
   const info = market.info[s];
   const f = market.funding[s];
+
   const [flash, setFlash] = useState(null);
   const prevPriceRef = useRef(t.last);
 
   useEffect(() => {
     if (t.last !== undefined && prevPriceRef.current !== undefined) {
-      if (t.last > prevPriceRef.current) setFlash('up');
-      else if (t.last < prevPriceRef.current) setFlash('down');
+      if (t.last > prevPriceRef.current) {
+        setFlash('up');
+      } else if (t.last < prevPriceRef.current) {
+        setFlash('down');
+      }
       if (t.last !== prevPriceRef.current) {
         const timer = setTimeout(() => setFlash(null), 400);
         prevPriceRef.current = t.last;
@@ -63,7 +67,13 @@ const Row = ({ s, widths, active, onPick, top }) => {
   }, [t.last]);
 
   const pc = t.pct > 0 ? 'text-[#089981]' : t.pct < 0 ? 'text-[#f23645]' : 'text-[#d1d4dc]';
-  const flashStyle = flash === 'up' ? 'bg-[#089981]/20 text-[#089981] transition-colors duration-200' : flash === 'down' ? 'bg-[#f23645]/20 text-[#f23645] transition-colors duration-200' : '';
+
+  let flashStyle = '';
+  if (flash === 'up') {
+    flashStyle = 'bg-[#089981]/20 text-[#089981] transition-colors duration-200';
+  } else if (flash === 'down') {
+    flashStyle = 'bg-[#f23645]/20 text-[#f23645] transition-colors duration-200';
+  }
 
   return (
     <div className={`ev-wl-row ${active ? 'on' : ''}`} style={{ top }} onClick={() => onPick(s)} data-testid={`watchlist-row-${s}`}>
@@ -83,6 +93,7 @@ const Row = ({ s, widths, active, onPick, top }) => {
 export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
   useMarketTick(1000);
   const [q, setQ] = useState('');
+  
   const [sort, setSortState] = useState(() => {
     try {
       const saved = localStorage.getItem('ev_watchlist_sort');
@@ -104,58 +115,17 @@ export const Watchlist = ({ symbol, onPick, widths, setWidths, onClose }) => {
           localStorage.setItem('ev_watchlist_sort', JSON.stringify(data.value));
         }
       })
-      .catch(() => {});
+      .catch((err) => console.error("Tercih yüklenemedi:", err));
   }, []);
 
   const setSort = (updater) => {
     setSortState((prev) => {
       const nextSort = typeof updater === 'function' ? updater(prev) : updater;
-      try { localStorage.setItem('ev_watchlist_sort', JSON.stringify(nextSort)); } catch (e) {}
+      
+      try {
+        localStorage.setItem('ev_watchlist_sort', JSON.stringify(nextSort));
+      } catch (e) {}
+
       fetch('/api/settings/watchlist_sort', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ value: nextSort }),
-      }).catch(() => {});
-      return nextSort;
-    });
-  };
-
-  useEffect(() => {
-    const ro = new ResizeObserver(() => body.current && setH(body.current.clientHeight));
-    if (body.current) ro.observe(body.current);
-    return () => ro.disconnect();
-  }, []);
-
-  const list = market.symbols.filter((s) => s.includes(q.toUpperCase()));
-  const rows = useMemo(() => [...list].sort((a, b) => {
-    const va = sortVal(a, sort.k); const vb = sortVal(b, sort.k);
-    return (va > vb ? 1 : va < vb ? -1 : 0) * sort.dir;
-  }), [list, sort]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const from = Math.max(0, Math.floor(scroll / ROW_H) - 5);
-  const to = Math.min(rows.length, from + Math.ceil(h / ROW_H) + 10);
-  const total = widths.reduce((a, b) => a + b, 0);
-
-  return (
-    <div className="ev-panel flex h-full flex-col" data-testid="watchlist-panel">
-      <div className="ev-panel-title">
-        <span>İzleme Listesi <span className="text-[#787b86]">({rows.length})</span></span>
-        <button type="button" className="ev-iconbtn" onClick={onClose} data-testid="watchlist-close-btn"><X size={16} /></button>
-      </div>
-      <div className="relative px-2 pb-2">
-        <Search size={14} className="absolute left-4 top-2 text-[#787b86]" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Sembol ara" className="ev-input pl-7" data-testid="watchlist-search-input" />
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto" ref={body} onScroll={(e) => setScroll(e.currentTarget.scrollTop)} data-testid="watchlist-body">
-        <div style={{ minWidth: total }}>
-          <Header widths={widths} setWidths={setWidths} sort={sort} setSort={setSort} />
-          <div className="relative" style={{ height: rows.length * ROW_H }}>
-            {rows.slice(from, to).map((s, i) => (
-              <Row key={s} s={s} widths={widths} active={s === symbol} onPick={onPick} top={(from + i) * ROW_H} />
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+        headers: { '
