@@ -49,7 +49,16 @@ api = APIRouter(prefix="/api")
 
 # ---------- Binance proxy (fallback when browser cannot reach Binance directly) ----------
 BINANCE_BASE = "https://www.binance.com/fapi/v1/"
-ALLOWED = {"exchangeInfo": 600, "klines": 0, "ticker/24hr": 2, "premiumIndex": 3, "fundingInfo": 600}
+# Futures Data (Open Interest, Long/Short Ratio) endpoint'lerini izin verilenler listesine ekliyoruz
+ALLOWED = {
+    "exchangeInfo": 600, 
+    "klines": 0, 
+    "ticker/24hr": 2, 
+    "premiumIndex": 3, 
+    "fundingInfo": 600,
+    "openInterest": 10,
+    "globalLongShortAccountRatio": 30
+}
 _cache: Dict[str, tuple] = {}
 _http: Optional[httpx.AsyncClient] = None
 
