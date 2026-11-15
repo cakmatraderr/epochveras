@@ -1,7 +1,6 @@
-// Base64 VAPID public key'i güvenli bir şekilde Uint8Array formatına dönüştüren fonksiyon
 function urlBase64ToUint8Array(base64String) {
   if (!base64String || typeof base64String !== 'string' || base64String.trim().startsWith('<')) {
-    throw new Error("Sunucudan geçerli bir VAPID anahtarı alınamadı (API yanıtı geçersiz).");
+    throw new Error("Sunucudan geçerli bir VAPID anahtarı alınamadı.");
   }
   const cleaned = base64String.trim().replace(/['"]+/g, '');
   const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
@@ -14,86 +13,54 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// PWA ve mobil modda mutlak URL garantisi sağlayan adres üretici
 const getApiUrl = (endpoint) => {
+  const EXTERNAL_BACKEND = 'https://epochveras.onrender.com'; 
+
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    if (window.location.port !== '8000') {
-      return `http://localhost:8000${endpoint}`;
-    }
+    return `http://localhost:8000${endpoint}`;
   }
-  // Canlı ortam ve PWA modunda Service Worker / scope karmaşasını önlemek için mutlak origin kullan
-  return `${window.location.origin}${endpoint}`;
+  return `${EXTERNAL_BACKEND}${endpoint}`;
 };
 
-// Telefonda veya tarayıcıda bildirim izni isteyip abone olma
 export async function subscribeUserToPush() {
-  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
-    alert("HATA: Push bildirimleri yalnızca HTTPS üzerinden çalışır!");
-    return false;
-  }
-
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    alert("Tarayıcınız veya bu mod push bildirimlerini desteklemiyor.");
+    alert("Tarayıcınız push bildirimlerini desteklemiyor.");
     return false;
   }
 
   try {
-    // 1. iOS Safari için bildirim izni isteme
     if (typeof window.Notification !== 'undefined') {
       const permission = await window.Notification.requestPermission();
       if (permission !== 'granted') {
-        alert("Bildirim izni reddedildi. (Durum: " + permission + ")");
+        alert("Bildirim izni reddedildi.");
         return false;
       }
     }
 
     const registration = await navigator.serviceWorker.ready;
     
-    // 2. Backend'den VAPID public key'i çekme
-    const publicKeyUrl = getApiUrl('/api/push/public-key');
-    const res = await fetch(publicKeyUrl, {
+    const res = await fetch(getApiUrl('/api/push/public-key'), {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
-      },
+      headers: { 'Accept': 'application/json' },
       cache: 'no-store'
     });
     
     const textData = await res.text();
-    
-    // Yanıtın HTML dönüp dönmediğini kesin olarak kontrol et
-    if (textData.trim().startsWith('<') || res.headers.get('content-type')?.includes('text/html')) {
-      throw new Error("API, JSON yerine HTML döndürdü. İstek Service Worker veya yönlendirici tarafından yakalandı.");
+    if (textData.trim().startsWith('<')) {
+      throw new Error("Backend adresi hatalı veya ulaşılamaz durumda.");
     }
     
-    let data;
-    try {
-      data = JSON.parse(textData);
-    } catch (e) {
-      throw new Error("API yanıtı JSON formatında ayrıştırılamadı.");
-    }
-    
-    if (!data.public_key) {
-      throw new Error("Backend yanıtında public_key bulunamadı.");
-    }
-
+    const data = JSON.parse(textData);
     const convertedKey = urlBase64ToUint8Array(data.public_key);
 
-    // 3. Tarayıcı üzerinden push aboneliği oluşturma
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: convertedKey
     });
 
-    // 4. Aboneliği backend'e kaydetme
-    const subscribeUrl = getApiUrl('/api/push/subscribe');
-    const subRes = await fetch(subscribeUrl, {
+    const subRes = await fetch(getApiUrl('/api/push/subscribe'), {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify(subscription),
       cache: 'no-store'
     });
@@ -105,39 +72,27 @@ export async function subscribeUserToPush() {
       throw new Error("Abonelik sunucuya kaydedilemedi.");
     }
   } catch (err) {
-    console.error("Push aboneliği başarısız:", err);
-    alert("Hata detayı: " + (err.message || err));
+    console.error("Push hatası:", err);
+    alert("Hata: " + err.message);
     return false;
   }
 }
 
-// Test bildirimi tetikleme fonksiyonu
-export async function sendTestNotification(message = "Epochveras test bildirimi çalışıyor!") {
+export async function sendTestNotification(message = "Epochveras test bildirimi!") {
   try {
-    const testUrl = getApiUrl('/api/push/send-test');
-    const res = await fetch(testUrl, {
+    const res = await fetch(getApiUrl('/api/push/send-test'), {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ message }),
       cache: 'no-store'
     });
     
     const textData = await res.text();
-    if (textData.trim().startsWith('<')) {
-      throw new Error("API, JSON yerine HTML döndürdü.");
-    }
-
-    let data = JSON.parse(textData);
-    if (res.ok) {
-      alert("Test bildirimi gönderildi!");
-    } else {
-      alert("Test gönderilemedi: " + (data.detail || "Bilinmeyen hata"));
-    }
+    if (textData.trim().startsWith('<')) throw new Error("Backend'e ulaşılamadı.");
+    
+    if (res.ok) alert("Test bildirimi gönderildi!");
+    else alert("Test gönderilemedi.");
   } catch (err) {
-    console.error("Test bildirimi hatası:", err);
-    alert("Test isteği gönderilemedi: " + err.message);
+    alert("Hata: " + err.message);
   }
 }
