@@ -1,9 +1,3 @@
-// src/lib/pushService.js
-
-/**
- * VAPID public anahtarını Base64 URL formatından tarayıcının (özellikle iOS Safari'nin) 
- * zorunlu koştuğu 65 baytlık P-256 Uint8Array formatına dönüştürür.
- */
 function urlBase64ToUint8Array(base64String) {
   if (!base64String || typeof base64String !== 'string') {
     throw new Error("Geçersiz VAPID anahtarı formatı.");
