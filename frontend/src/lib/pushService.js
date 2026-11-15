@@ -18,7 +18,16 @@ function urlBase64ToUint8Array(base64String) {
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
-  
+
+  // iOS Safari P-256 standardı için 65 bayt ve 0x04 kontrolü
+  if (outputArray.length === 64) {
+    // Eğer 0x04 baytı eksik geldiyse başına ekle
+    const paddedArray = new Uint8Array(65);
+    paddedArray[0] = 0x04;
+    paddedArray.set(outputArray, 1);
+    return paddedArray;
+  }
+
   return outputArray;
 }
 
