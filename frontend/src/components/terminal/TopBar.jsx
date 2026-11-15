@@ -1,7 +1,6 @@
 import React from 'react';
-import { ChevronDown, FunctionSquare, AlarmClockPlus, Search, Bell, Send } from 'lucide-react';
+import { ChevronDown, FunctionSquare, AlarmClockPlus, Search } from 'lucide-react';
 import { TIMEFRAMES } from '../../lib/format';
-import { subscribeUserToPush, sendTestNotification } from '../../lib/pushService';
 
 const FAV = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
 
@@ -23,7 +22,7 @@ export const TopBar = ({ symbol, tf, setTf, onSymbol, onIndicators, onAlert, liv
     </button>
     <span className="ev-sep" />
 
-    {/* Zaman Dilimi Barı (12. Madde: Aktif Zaman Dilimine Arka Plan Vurgusu / Gölge) */}
+    {/* Zaman Dilimi Barı */}
     <div className="flex items-center gap-0.5" data-testid="timeframe-bar">
       {TIMEFRAMES.filter((t) => FAV.includes(t.v) || t.v === tf).map((t) => {
         const isActive = tf === t.v;
@@ -75,28 +74,6 @@ export const TopBar = ({ symbol, tf, setTf, onSymbol, onIndicators, onAlert, liv
     <span className="ev-sep" />
     <button type="button" className="ev-tbtn gap-1.5" onClick={onAlert} data-testid="top-alert-btn">
       <AlarmClockPlus size={17} />Alarm
-    </button>
-
-    {/* PWA Bildirim Entegrasyonu Butonları */}
-    <span className="ev-sep" />
-    <button 
-      type="button" 
-      className="ev-tbtn gap-1.5 text-[#2962ff] hover:bg-[#2a2e39]/50 px-2 py-1 rounded" 
-      onClick={subscribeUserToPush}
-      title="Telefona veya Tarayıcıya Bildirim İzni Ver"
-      data-testid="push-subscribe-btn"
-    >
-      <Bell size={16} /> Bildirimleri Aç
-    </button>
-
-    <button 
-      type="button" 
-      className="ev-tbtn gap-1.5 text-[#787b86] hover:text-[#d1d4dc] hover:bg-[#2a2e39]/50 px-2 py-1 rounded" 
-      onClick={() => sendTestNotification("Epochveras alarm test bildirimi başarıyla ulaştı!")}
-      title="Test Bildirimi Gönder"
-      data-testid="push-test-btn"
-    >
-      <Send size={14} /> Test
     </button>
 
     <div className="ml-auto flex items-center gap-2 pr-2 text-[11px] text-[#787b86]" data-testid="live-status">
