@@ -3,6 +3,7 @@ import os
 import time
 import logging
 import uuid
+import json
 from contextlib import suppress
 from pathlib import Path
 from datetime import datetime, timezone
@@ -189,9 +190,9 @@ async def put_setting(key: str, s: SettingIn):
 
 
 # ---------- Web Push Endpoints ----------
-# VAPID anahtarları (Çevre değişkenlerinden alınır, yoksa test anahtarları kullanılır)
-VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nks8Wk")
-VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "your_private_key_here")
+# VAPID anahtarları (Çevre değişkenlerinden alınır, tırnak/boşluk kalıntıları temizlenir)
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nks8Wk").strip().strip('"\'')
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "your_private_key_here").strip().strip('"\'')
 VAPID_CLAIMS = {"sub": "mailto:admin@epochveras.com"}
 
 
