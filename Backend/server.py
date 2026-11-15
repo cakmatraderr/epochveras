@@ -10,11 +10,17 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, HTTPException, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Request, Body
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, Field
 from pymongo import ASCENDING, IndexModel
 from starlette.middleware.cors import CORSMiddleware
+
+# Web Push için pywebpush kütüphanesi
+try:
+    from pywebpush import webpush, WebPushException
+except ImportError:
+    webpush = None
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -29,6 +35,7 @@ INDEXES: dict[str, list[IndexModel]] = {
     ],
     "alerts": [IndexModel([("id", ASCENDING)], name="id", unique=True)],
     "settings": [IndexModel([("key", ASCENDING)], name="key", unique=True)],
+    "push_subscriptions": [IndexModel([("endpoint", ASCENDING)], name="endpoint", unique=True)],
 }
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -109,6 +116,11 @@ class SettingIn(BaseModel):
     value: Any
 
 
+class PushSubscriptionModel(BaseModel):
+    endpoint: str
+    keys: dict
+
+
 # ---------- Drawings ----------
 @api.get("/drawings")
 async def list_drawings(symbol: str) -> List[dict]:
@@ -174,6 +186,49 @@ async def get_setting(key: str):
 async def put_setting(key: str, s: SettingIn):
     await db.settings.replace_one({"key": key}, {"key": key, "value": s.value}, upsert=True)
     return {"key": key, "value": s.value}
+
+
+# ---------- Web Push Endpoints ----------
+# VAPID anahtarları (Çevre değişkenlerinden alınır, yoksa test anahtarları kullanılır)
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nks8Wk")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "your_private_key_here")
+VAPID_CLAIMS = {"sub": "mailto:admin@epochveras.com"}
+
+
+@api.get("/push/public-key")
+async def get_vapid_public_key():
+    return {"public_key": VAPID_PUBLIC_KEY}
+
+
+@api.post("/push/subscribe")
+async def subscribe_push(sub: PushSubscriptionModel):
+    doc = sub.model_dump()
+    await db.push_subscriptions.replace_one({"endpoint": sub.endpoint}, doc, upsert=True)
+    return {"status": "success", "message": "Bildirim aboneliği kaydedildi."}
+
+
+@api.post("/push/send-test")
+async def send_test_notification(payload: dict = Body(...)):
+    if not webpush:
+        raise HTTPException(status_code=500, detail="pywebpush kütüphanesi sunucuda yüklü değil.")
+    
+    message = payload.get("message", "Epochveras test bildirimi başarılı!")
+    subscriptions = await db.push_subscriptions.find({}, {"_id": 0}).to_list(1000)
+    
+    results = []
+    for sub in subscriptions:
+        try:
+            webpush(
+                subscription_info=sub,
+                data=json.dumps({"title": "Epochveras Terminal", "body": message}),
+                vapid_private_key=VAPID_PRIVATE_KEY,
+                vapid_claims=VAPID_CLAIMS
+            )
+            results.append({"endpoint": sub["endpoint"], "status": "sent"})
+        except Exception as e:
+            results.append({"endpoint": sub["endpoint"], "error": str(e)})
+            
+    return {"status": "completed", "results": results}
 
 
 @api.get("/")
