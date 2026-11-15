@@ -14,10 +14,14 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// API isteklerinin doğru adrese (göreceli veya gerekirse tam port/domain adresine) gitmesini sağlayan yardımcı
+// API isteklerinin doğrudan FastAPI backend'ine ulaşmasını sağlayan adres yöneticisi
 const getApiUrl = (endpoint) => {
-  // Eğer yerelde (localhost) çalışıyorsak direkt /api kullanabiliriz (craco proxy yakalar)
-  // Canlı ortamda ise doğrudan /api isteği atılır. Eğer backend farklı bir portta veya alan adındaysa buraya yazılabilir.
+  // Eğer tarayıcıda localhost üzerinde ama farklı bir portta (örn: 3000) çalışıyorsak,
+  // istekleri doğrudan 8000 numaralı FastAPI portuna yönlendirebiliriz.
+  if (window.location.hostname === 'localhost' && window.location.port !== '8000') {
+    return `http://localhost:8000${endpoint}`;
+  }
+  // Canlı/uzak ortamda aynı domain üzerinden gidiliyorsa doğrudan endpoint döndürülür
   return endpoint;
 };
 
@@ -57,9 +61,9 @@ export async function subscribeUserToPush() {
     
     const textData = await res.text();
     
-    // Yanıtın gerçekten JSON olup olmadığını ve HTML dönüp dönmediğini kontrol et
+    // Yanıtın HTML dönüp dönmediğini kesin olarak kontrol et
     if (textData.trim().startsWith('<') || res.headers.get('content-type')?.includes('text/html')) {
-      throw new Error("API, JSON yerine HTML döndürdü. Backend sunucusu isteği karşılamıyor veya rota bulunamadı.");
+      throw new Error("API, JSON yerine HTML döndürdü. Backend sunucusu portu veya adresi erişilebilir değil.");
     }
     
     let data;
