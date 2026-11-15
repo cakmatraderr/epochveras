@@ -14,15 +14,15 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-// API isteklerinin doğrudan FastAPI backend'ine ulaşmasını sağlayan adres yöneticisi
+// PWA ve mobil modda mutlak URL garantisi sağlayan adres üretici
 const getApiUrl = (endpoint) => {
-  // Eğer tarayıcıda localhost üzerinde ama farklı bir portta (örn: 3000) çalışıyorsak,
-  // istekleri doğrudan 8000 numaralı FastAPI portuna yönlendirebiliriz.
-  if (window.location.hostname === 'localhost' && window.location.port !== '8000') {
-    return `http://localhost:8000${endpoint}`;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    if (window.location.port !== '8000') {
+      return `http://localhost:8000${endpoint}`;
+    }
   }
-  // Canlı/uzak ortamda aynı domain üzerinden gidiliyorsa doğrudan endpoint döndürülür
-  return endpoint;
+  // Canlı ortam ve PWA modunda Service Worker / scope karmaşasını önlemek için mutlak origin kullan
+  return `${window.location.origin}${endpoint}`;
 };
 
 // Telefonda veya tarayıcıda bildirim izni isteyip abone olma
@@ -50,20 +50,21 @@ export async function subscribeUserToPush() {
     const registration = await navigator.serviceWorker.ready;
     
     // 2. Backend'den VAPID public key'i çekme
-    const res = await fetch(getApiUrl('/api/push/public-key'), {
+    const publicKeyUrl = getApiUrl('/api/push/public-key');
+    const res = await fetch(publicKeyUrl, {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
         'X-Requested-With': 'XMLHttpRequest'
       },
-      cache: 'no-cache'
+      cache: 'no-store'
     });
     
     const textData = await res.text();
     
     // Yanıtın HTML dönüp dönmediğini kesin olarak kontrol et
     if (textData.trim().startsWith('<') || res.headers.get('content-type')?.includes('text/html')) {
-      throw new Error("API, JSON yerine HTML döndürdü. Backend sunucusu portu veya adresi erişilebilir değil.");
+      throw new Error("API, JSON yerine HTML döndürdü. İstek Service Worker veya yönlendirici tarafından yakalandı.");
     }
     
     let data;
@@ -86,13 +87,15 @@ export async function subscribeUserToPush() {
     });
 
     // 4. Aboneliği backend'e kaydetme
-    const subRes = await fetch(getApiUrl('/api/push/subscribe'), {
+    const subscribeUrl = getApiUrl('/api/push/subscribe');
+    const subRes = await fetch(subscribeUrl, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify(subscription)
+      body: JSON.stringify(subscription),
+      cache: 'no-store'
     });
 
     if (subRes.ok) {
@@ -111,13 +114,15 @@ export async function subscribeUserToPush() {
 // Test bildirimi tetikleme fonksiyonu
 export async function sendTestNotification(message = "Epochveras test bildirimi çalışıyor!") {
   try {
-    const res = await fetch(getApiUrl('/api/push/send-test'), {
+    const testUrl = getApiUrl('/api/push/send-test');
+    const res = await fetch(testUrl, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ message }),
+      cache: 'no-store'
     });
     
     const textData = await res.text();
