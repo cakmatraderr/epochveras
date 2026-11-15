@@ -13,14 +13,23 @@ function urlBase64ToUint8Array(base64String) {
 // Telefonda veya tarayıcıda bildirim izni isteyip abone olma
 export async function subscribeUserToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    alert("Tarayıcınız push bildirimlerini desteklemiyor.");
+    alert("Tarayıcınız veya bu mod push bildirimlerini desteklemiyor.");
     return false;
   }
 
   try {
+    // 1. Önce iOS Safari için açıkça bildirim izni penceresini tetikliyoruz
+    if (typeof window.Notification !== 'undefined') {
+      const permission = await window.Notification.requestPermission();
+      if (permission !== 'granted') {
+        alert("Bildirim izni kullanıcı tarafından reddedildi.");
+        return false;
+      }
+    }
+
     const registration = await navigator.serviceWorker.ready;
     
-    // Backend'den VAPID public key'i çekiyoruz
+    // 2. Backend'den VAPID public key'i çekiyoruz
     const res = await fetch('/api/push/public-key');
     const data = await res.json();
     
@@ -30,13 +39,13 @@ export async function subscribeUserToPush() {
 
     const convertedKey = urlBase64ToUint8Array(data.public_key);
 
-    // Tarayıcı üzerinden push aboneliği oluşturuyoruz
+    // 3. Tarayıcı üzerinden push aboneliği oluşturuyoruz
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: convertedKey
     });
 
-    // Aboneliği backend'e gönderip kaydediyoruz
+    // 4. Aboneliği backend'e gönderip kaydediyoruz
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -51,7 +60,7 @@ export async function subscribeUserToPush() {
     }
   } catch (err) {
     console.error("Push aboneliği başarısız:", err);
-    alert("Bildirim izni alınamadı veya reddedildi.");
+    alert("Bildirim izni alınamadı: " + (err.message || err));
     return false;
   }
 }
