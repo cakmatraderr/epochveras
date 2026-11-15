@@ -55,17 +55,10 @@ body.ev-resizing, body.ev-resizing * { cursor: col-resize !important; user-selec
 .ev-wbtn span { display: block; width: 14px; background: var(--ev-text); }
 .ev-wbtn.on, .ev-wbtn:hover { background: #2a2e39; }
 
-/* --- SADECE YAN PANEL RESIZER'LARI (Grafik alanına dokunmaz) --- */
 .ev-side { position: relative; flex-shrink: 0; display: flex; flex-direction: column; min-width: 0; max-height: 100%; overflow: hidden; background: #000; }
-.ev-vresizer { position: absolute; left: -8px; top: 0; bottom: 0; width: 16px; cursor: col-resize; z-index: 10; touch-action: none; background: transparent; }
-.ev-vresizer::after { content: ''; position: absolute; left: 7px; top: 0; bottom: 0; width: 2px; background: var(--ev-border); transition: background-color 0.15s; }
-.ev-vresizer:hover::after, .ev-vresizer:active::after { background: var(--ev-blue); }
-
-.ev-hresizer { height: 16px; margin-top: -8px; margin-bottom: -8px; flex-shrink: 0; cursor: row-resize; z-index: 10; touch-action: none; background: transparent; position: relative; }
-.ev-hresizer::after { content: ''; position: absolute; left: 0; right: 0; top: 7px; height: 2px; background: var(--ev-border); transition: background-color 0.15s; }
-.ev-hresizer:hover::after, .ev-hresizer:active::after { background: var(--ev-blue); }
-/* ------------------------------------------------------------- */
-
+.ev-vresizer { position: absolute; left: -4px; top: 0; bottom: 0; width: 6px; cursor: col-resize; z-index: 10; }
+.ev-vresizer:hover, .ev-hresizer:hover { background: rgba(41,98,255,.5); }
+.ev-hresizer { height: 4px; flex-shrink: 0; cursor: row-resize; background: #000; }
 .ev-panel { background: var(--ev-panel); display: flex; flex-direction: column; min-height: 0; }
 .ev-panel-title { height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; font-size: 14px; font-weight: 600; }
 .ev-input { width: 100%; height: 30px; border-radius: 4px; background: #000; border: 1px solid var(--ev-border); color: var(--ev-text); font-size: 13px; padding: 0 8px; outline: none; transition: border-color .12s; }
