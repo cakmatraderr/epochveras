@@ -1,6 +1,6 @@
 function urlBase64ToUint8Array(base64String) {
   if (!base64String || typeof base64String !== 'string') {
-    throw new Error("Gelen veri metin değil: " + typeof base64String);
+    throw new Error("Geçersiz VAPID anahtarı formatı.");
   }
   
   let cleaned = base64String.trim().replace(/^["'](.+)["']$/, '$1').replace(/['"]+/g, '');
@@ -11,7 +11,7 @@ function urlBase64ToUint8Array(base64String) {
   try {
     rawData = window.atob(base64);
   } catch (e) {
-    throw new Error("Base64 çözülemedi. Gelen ham veri: " + base64String);
+    throw new Error("Base64 çözülemedi.");
   }
 
   const outputArray = new Uint8Array(rawData.length);
@@ -19,11 +19,6 @@ function urlBase64ToUint8Array(base64String) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   
-  // Boyut uyuşmazlığında hatayı ham veri ile göster ki anlatalım
-  if (outputArray.length !== 65) {
-    throw new Error(`Anahtar boyutu hatalı (${outputArray.length} bayt, 65 olmalı). Gelen: ${base64String}`);
-  }
-
   return outputArray;
 }
 
@@ -71,10 +66,6 @@ export async function subscribeUserToPush() {
     }
 
     const rawKey = jsonResponse.public_key || jsonResponse.key || jsonResponse.vapid_public_key || textData;
-    
-    // Ham anahtarı ve uzunluğunu ekranda uyarı olarak gösterelim
-    alert("Sunucudan gelen anahtar: " + String(rawKey).substring(0, 20) + "... (Uzunluk: " + String(rawKey).length + ")");
-
     const convertedKey = urlBase64ToUint8Array(rawKey);
 
     const subscription = await registration.pushManager.subscribe({
