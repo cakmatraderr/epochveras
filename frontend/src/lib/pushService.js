@@ -1,8 +1,15 @@
+// src/lib/pushService.js
+
+/**
+ * VAPID public anahtarını Base64 URL formatından tarayıcının (özellikle iOS Safari'nin) 
+ * zorunlu koştuğu 65 baytlık P-256 Uint8Array formatına dönüştürür.
+ */
 function urlBase64ToUint8Array(base64String) {
   if (!base64String || typeof base64String !== 'string') {
     throw new Error("Geçersiz VAPID anahtarı formatı.");
   }
   
+  // Olası tırnak ve boşluk kalıntılarını temizle
   let cleaned = base64String.trim().replace(/^["'](.+)["']$/, '$1').replace(/['"]+/g, '');
   const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
   const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -19,7 +26,7 @@ function urlBase64ToUint8Array(base64String) {
     outputArray[i] = rawData.charCodeAt(i);
   }
 
-  // Eğer anahtar 64 baytsa başına 0x04 ekleyerek 65 bayta tamamla (iOS Safari şartı)
+  // iOS Safari P-256 standardı uyumluluğu (64 baytsa başına 0x04 ekle)
   if (outputArray.length === 64) {
     const paddedArray = new Uint8Array(65);
     paddedArray[0] = 0x04;
@@ -27,7 +34,6 @@ function urlBase64ToUint8Array(base64String) {
     return paddedArray;
   }
 
-  // Eğer zaten 65 baytsa ve ilk bayt 0x04 değilse düzelt
   if (outputArray.length === 65 && outputArray[0] !== 0x04) {
     outputArray[0] = 0x04;
   }
@@ -35,89 +41,41 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
-const getApiUrl = (endpoint) => {
-  const EXTERNAL_BACKEND = 'https://epochveras.onrender.com'; 
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return `http://localhost:8000${endpoint}`;
-  }
-  return `${EXTERNAL_BACKEND}${endpoint}`;
-};
-
+/**
+ * Backend'den VAPID public key'i çeker ve push aboneliğini başlatır.
+ */
 export async function subscribeUserToPush() {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-    alert("Tarayıcınız push bildirimlerini desteklemiyor.");
-    return false;
+    throw new Error("Bu tarayıcı Web Push bildirimlerini desteklemiyor.");
   }
 
-  try {
-    if (typeof window.Notification !== 'undefined') {
-      const permission = await window.Notification.requestPermission();
-      if (permission !== 'granted') {
-        alert("Bildirim izni reddedildi.");
-        return false;
-      }
-    }
-
-    const registration = await navigator.serviceWorker.ready;
-    
-    const res = await fetch(getApiUrl('/api/push/public-key'), {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-store'
-    });
-    
-    const textData = await res.text();
-    if (textData.trim().startsWith('<')) {
-      throw new Error("Backend HTML döndürdü.");
-    }
-    
-    let jsonResponse;
-    try {
-      jsonResponse = JSON.parse(textData);
-    } catch (e) {
-      jsonResponse = { public_key: textData.trim() };
-    }
-
-    const rawKey = jsonResponse.public_key || jsonResponse.key || jsonResponse.vapid_public_key || textData;
-    const convertedKey = urlBase64ToUint8Array(rawKey);
-
-    const subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: convertedKey
-    });
-
-    const subRes = await fetch(getApiUrl('/api/push/subscribe'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(subscription),
-      cache: 'no-store'
-    });
-
-    if (subRes.ok) {
-      alert("Bildirimler başarıyla aktif edildi!");
-      return true;
-    } else {
-      throw new Error("Abonelik sunucuya kaydedilemedi.");
-    }
-  } catch (err) {
-    console.error("Push hatası:", err);
-    alert("Hata detayı: " + err.message);
-    return false;
+  const registration = await navigator.serviceWorker.ready;
+  
+  // Backend'den public key'i al
+  const response = await fetch('/api/push/public-key');
+  if (!response.ok) {
+    throw new Error("VAPID public key sunucudan alınamadı.");
   }
-}
+  
+  const data = await response.json();
+  const rawPublicKey = data.public_key;
+  
+  const convertedVapidKey = urlBase64ToUint8Array(rawPublicKey);
 
-export async function sendTestNotification(message = "Epochveras test bildirimi!") {
-  try {
-    const res = await fetch(getApiUrl('/api/push/send-test'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ message }),
-      cache: 'no-store'
-    });
-    
-    if (!res.ok) throw new Error("Test gönderilemedi.");
-    alert("Test bildirimi gönderildi!");
-  } catch (err) {
-    alert("Hata: " + err.message);
-  }
+  // Push aboneliğini oluştur
+  const subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: convertedVapidKey
+  });
+
+  // Aboneliği backend veritabanına kaydet
+  await fetch('/api/push/subscribe', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(subscription),
+  });
+
+  return subscription;
 }
