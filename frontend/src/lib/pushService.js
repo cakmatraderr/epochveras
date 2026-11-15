@@ -38,12 +38,14 @@ export async function subscribeUserToPush() {
 
     const registration = await navigator.serviceWorker.ready;
     
-    // 2. Backend'den VAPID public key'i çekme (Doğrudan mutlak veya göreceli API yolu)
+    // 2. Backend'den VAPID public key'i çekme (JSON garantili istek)
     const res = await fetch('/api/push/public-key', {
+      method: 'GET',
       headers: {
         'Accept': 'application/json',
         'X-Requested-With': 'XMLHttpRequest'
-      }
+      },
+      cache: 'no-cache'
     });
     
     const textData = await res.text();
@@ -52,7 +54,7 @@ export async function subscribeUserToPush() {
     try {
       data = JSON.parse(textData);
     } catch (e) {
-      throw new Error("API JSON yerine HTML döndürdü. Endpoint adresi hatalı olabilir.");
+      throw new Error("API JSON yerine HTML döndürdü. İstek yönlendirmesi (proxy/router) hatalı olabilir.");
     }
     
     if (!data.public_key) {
@@ -101,7 +103,15 @@ export async function sendTestNotification(message = "Epochveras test bildirimi 
       },
       body: JSON.stringify({ message })
     });
-    const data = await res.json();
+    
+    const textData = await res.text();
+    let data;
+    try {
+      data = JSON.parse(textData);
+    } catch (e) {
+      throw new Error("API JSON yerine HTML döndürdü.");
+    }
+
     if (res.ok) {
       alert("Test bildirimi gönderildi!");
     } else {
