@@ -102,7 +102,7 @@ export default function App() {
         <div className="ev-splash" data-testid="splash">
           <img src="/icon-512.png" alt="Epochveras Logo" className="h-12 w-12 rounded-lg object-contain mb-1" />
           <div className="mt-3 text-[15px] text-[#d1d4dc]">Epochveras</div>
-          <div className="mt-1 text-[12px] text-[#787b86]">{err ? `Bağlantı hatası: ${err}` : 'Binance vadeli piyasaları yükleniyor…'}</div>
+          <div className="mt-1 text-[12px] text-[#787b86]">{err ? `Bağlantı hatası: ${err}` : 'Piyasalar yükleniyor…'}</div>
         </div>
       )}
       <Toaster theme="dark" position="bottom-right" />
