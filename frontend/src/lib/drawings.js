@@ -57,13 +57,17 @@ function renderPosition(ctx, d, g, prec, active) {
   if ([yE, yT, yS].some((v) => v == null)) return;
   const L = Math.min(x1, x2);
   const W = Math.abs(x2 - x1);
-  
-  // Kar ve zarar alanları (Kar yeşil, Zarar kırmızı)
-  ctx.fillStyle = 'rgba(8,153,129,0.22)';
+
+  // --- ŞABLONUN YÖNÜNE VE KONUMUNA GÖRE DİNAMİK RENK ---
+  const isTargetAbove = yT < yE; 
+
+  ctx.fillStyle = isTargetAbove ? 'rgba(8,153,129,0.28)' : 'rgba(242,54,69,0.28)';
   ctx.fillRect(L, Math.min(yE, yT), W, Math.abs(yT - yE));
-  ctx.fillStyle = 'rgba(242,54,69,0.22)';
-  ctx.fillRect(L, Math.min(yE, yS), W, Math.abs(yS - yE));
   
+  ctx.fillStyle = !isTargetAbove ? 'rgba(8,153,129,0.28)' : 'rgba(242,54,69,0.28)';
+  ctx.fillRect(L, Math.min(yE, yS), W, Math.abs(yS - yE));
+  // ----------------------------------------------------
+
   line(ctx, L, yE, L + W, yE, '#787b86', 1);
   if (!active) return;
   const cx = L + W / 2;
