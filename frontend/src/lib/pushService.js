@@ -1,6 +1,6 @@
 function urlBase64ToUint8Array(base64String) {
-  if (!base64String || typeof base64String !== 'string' || base64String.trim().startsWith('<')) {
-    throw new Error("Sunucudan geçerli bir VAPID anahtarı alınamadı.");
+  if (!base64String || typeof base64String !== 'string') {
+    throw new Error("Geçersiz VAPID anahtarı formatı.");
   }
   const cleaned = base64String.trim().replace(/['"]+/g, '');
   const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
@@ -47,11 +47,23 @@ export async function subscribeUserToPush() {
     
     const textData = await res.text();
     if (textData.trim().startsWith('<')) {
-      throw new Error("Backend adresi hatalı veya ulaşılamaz durumda.");
+      throw new Error("Backend HTML döndürdü.");
     }
     
-    const data = JSON.parse(textData);
-    const convertedKey = urlBase64ToUint8Array(data.public_key);
+    let jsonResponse;
+    try {
+      jsonResponse = JSON.parse(textData);
+    } catch (e) {
+      jsonResponse = { public_key: textData.trim() };
+    }
+
+    // Backend'den gelebilecek farklı anahtar isimlerini otomatik yakala
+    const rawKey = jsonResponse.public_key || jsonResponse.key || jsonResponse.vapid_public_key;
+    if (!rawKey) {
+      throw new Error("Public key bulunamadı. Yanıt: " + textData);
+    }
+
+    const convertedKey = urlBase64ToUint8Array(rawKey);
 
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
@@ -73,7 +85,7 @@ export async function subscribeUserToPush() {
     }
   } catch (err) {
     console.error("Push hatası:", err);
-    alert("Hata: " + err.message);
+    alert("Hata detayı: " + err.message);
     return false;
   }
 }
@@ -87,11 +99,8 @@ export async function sendTestNotification(message = "Epochveras test bildirimi!
       cache: 'no-store'
     });
     
-    const textData = await res.text();
-    if (textData.trim().startsWith('<')) throw new Error("Backend'e ulaşılamadı.");
-    
-    if (res.ok) alert("Test bildirimi gönderildi!");
-    else alert("Test gönderilemedi.");
+    if (!res.ok) throw new Error("Test gönderilemedi.");
+    alert("Test bildirimi gönderildi!");
   } catch (err) {
     alert("Hata: " + err.message);
   }
