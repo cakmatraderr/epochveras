@@ -38,8 +38,14 @@ export async function subscribeUserToPush() {
 
     const registration = await navigator.serviceWorker.ready;
     
-    // 2. Backend'den VAPID public key'i çekme
-    const res = await fetch('/api/push/public-key');
+    // 2. Backend'den VAPID public key'i çekme (Doğrudan mutlak veya göreceli API yolu)
+    const res = await fetch('/api/push/public-key', {
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      }
+    });
+    
     const textData = await res.text();
     
     let data;
@@ -64,7 +70,10 @@ export async function subscribeUserToPush() {
     // 4. Aboneliği backend'e kaydetme
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify(subscription)
     });
 
@@ -86,7 +95,10 @@ export async function sendTestNotification(message = "Epochveras test bildirimi 
   try {
     const res = await fetch('/api/push/send-test', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ message })
     });
     const data = await res.json();
