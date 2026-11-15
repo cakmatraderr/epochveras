@@ -1,15 +1,31 @@
 function urlBase64ToUint8Array(base64String) {
   if (!base64String || typeof base64String !== 'string') {
-    throw new Error("Geçersiz VAPID anahtarı formatı.");
+    throw new Error("VAPID anahtarı metin formatında değil.");
   }
-  const cleaned = base64String.trim().replace(/['"]+/g, '');
+  
+  // Tüm boşlukları, tırnakları ve gereksiz karakterleri temizle
+  let cleaned = base64String.trim().replace(/^["'](.+)["']$/, '$1').replace(/['"]+/g, '');
+  
   const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
   const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const rawData = window.atob(base64);
+  
+  let rawData;
+  try {
+    rawData = window.atob(base64);
+  } catch (e) {
+    throw new Error("Base64 çözme hatası: " + base64);
+  }
+
   const outputArray = new Uint8Array(rawData.length);
   for (let i = 0; i < rawData.length; ++i) {
     outputArray[i] = rawData.charCodeAt(i);
   }
+  
+  // P-256 public key tam olarak 65 bayt olmalıdır
+  if (outputArray.length !== 65) {
+    throw new Error("Geçersiz anahtar uzunluğu (" + outputArray.length + " bayt). 65 bayt olmalı.");
+  }
+
   return outputArray;
 }
 
@@ -57,12 +73,7 @@ export async function subscribeUserToPush() {
       jsonResponse = { public_key: textData.trim() };
     }
 
-    // Backend'den gelebilecek farklı anahtar isimlerini otomatik yakala
-    const rawKey = jsonResponse.public_key || jsonResponse.key || jsonResponse.vapid_public_key;
-    if (!rawKey) {
-      throw new Error("Public key bulunamadı. Yanıt: " + textData);
-    }
-
+    const rawKey = jsonResponse.public_key || jsonResponse.key || jsonResponse.vapid_public_key || textData;
     const convertedKey = urlBase64ToUint8Array(rawKey);
 
     const subscription = await registration.pushManager.subscribe({
