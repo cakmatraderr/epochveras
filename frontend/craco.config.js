@@ -223,7 +223,19 @@ if (emergentOverlay) {
 }
 
 const configureDevServer = webpackConfig.devServer;
-webpackConfig.devServer = (devServerConfig) =>
-  makeDevServerV5Compatible(configureDevServer(devServerConfig));
+webpackConfig.devServer = (devServerConfig) => {
+  const updatedConfig = configureDevServer(devServerConfig);
+  
+  // FastAPI backend yönlendirmesi (Proxy)
+  updatedConfig.proxy = {
+    '/api': {
+      target: 'http://localhost:8000',
+      changeOrigin: true,
+      secure: false,
+    },
+  };
+
+  return makeDevServerV5Compatible(updatedConfig);
+};
 
 module.exports = webpackConfig;
