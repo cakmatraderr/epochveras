@@ -55,65 +55,101 @@ body.ev-resizing, body.ev-resizing * { cursor: col-resize !important; user-selec
 .ev-wbtn span { display: block; width: 14px; background: var(--ev-text); }
 .ev-wbtn.on, .ev-wbtn:hover { background: #2a2e39; }
 
-/* --- TABLET UYUMLU GENİŞLETİLMİŞ TUTMA / DOKUNMA ALANLARI --- */
-.ev-side { position: relative; flex-shrink: 0; display: flex; flex-direction: column; min-width: 0; max-height: 100%; overflow: hidden; background: #000; }
+/* --- TABLET VE DOKUNMATİK UYUMLU TUTAMAÇLAR --- */
+.ev-side { 
+  position: relative; 
+  flex-shrink: 0; 
+  display: flex; 
+  flex-direction: column; 
+  min-width: 0; 
+  max-height: 100%; 
+  overflow: visible; /* Dışarı taşan dokunma alanının kesilmesini önler */
+  background: #000; 
+}
 
 /* Dikey panel ayırıcı (Watchlist / Alarm sol kenarı) */
 .ev-vresizer { 
   position: absolute; 
-  left: -20px; /* Sola doğru 20px görünmez dokunma alanı */
+  left: -18px; 
   top: 0; 
   bottom: 0; 
-  width: 30px; /* Toplam parmakla kavrama kalınlığı */
+  width: 36px; /* 36 piksel genişliğinde gerçek dokunma alanı */
   cursor: col-resize; 
-  z-index: 50; 
-  touch-action: none; /* Tablette sayfanın kaymasını engeller */
+  z-index: 999; 
+  touch-action: none; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
 }
 
+/* Çizgi */
 .ev-vresizer::after {
   content: '';
-  position: absolute;
-  left: 20px; /* Çizginin tam durduğu yer */
-  top: 0;
-  bottom: 0;
-  width: 2px;
+  width: 4px;
+  height: 100%;
   background: var(--ev-border);
   transition: background-color 0.15s;
 }
 
-.ev-vresizer:hover::after, .ev-vresizer:active::after { 
+/* Ortadaki parmak tutma göstergesi (hap şeklinde tutamaç) */
+.ev-vresizer::before {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 44px;
+  border-radius: 4px;
+  background: #434651;
+  border: 1px solid #000;
+  z-index: 2;
+}
+
+.ev-vresizer:hover::after, .ev-vresizer:active::after,
+.ev-vresizer:hover::before, .ev-vresizer:active::before { 
   background: var(--ev-blue); 
 }
 
 /* Yatay panel ayırıcı (Watchlist ile Alarm arası) */
 .ev-hresizer { 
-  height: 30px; /* Toplam parmakla kavrama yüksekliği */
-  margin-top: -15px;
-  margin-bottom: -15px;
+  height: 28px; 
+  margin-top: -12px;
+  margin-bottom: -12px;
   flex-shrink: 0; 
   cursor: row-resize; 
-  z-index: 50;
-  touch-action: none; /* Tablette sayfanın kaymasını engeller */
-  background: transparent;
+  z-index: 999;
+  touch-action: none; 
+  display: flex;
+  align-items: center;
+  justify-content: center;
   position: relative;
+  background: transparent;
 }
 
 .ev-hresizer::after {
   content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 14px; /* Çizginin tam durduğu yer */
-  height: 2px;
+  width: 100%;
+  height: 4px;
   background: var(--ev-border);
   transition: background-color 0.15s;
 }
 
-.ev-hresizer:hover::after, .ev-hresizer:active::after { 
+/* Yatay tutamaç ortasındaki tutma çentiği */
+.ev-hresizer::before {
+  content: '';
+  position: absolute;
+  width: 44px;
+  height: 6px;
+  border-radius: 4px;
+  background: #434651;
+  border: 1px solid #000;
+  z-index: 2;
+}
+
+.ev-hresizer:hover::after, .ev-hresizer:active::after,
+.ev-hresizer:hover::before, .ev-hresizer:active::before { 
   background: var(--ev-blue); 
 }
-/* ------------------------------------------------------------- */
+/* -------------------------------------------------- */
 
 .ev-panel { background: var(--ev-panel); display: flex; flex-direction: column; min-height: 0; }
 .ev-panel-title { height: 40px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 12px; font-size: 14px; font-weight: 600; }
