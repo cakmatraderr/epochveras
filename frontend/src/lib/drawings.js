@@ -58,23 +58,18 @@ function renderPosition(ctx, d, g, prec, active) {
   const L = Math.min(x1, x2);
   const W = Math.abs(x2 - x1);
 
-  // --- TRADINGVIEW TARZI ANLIK FİYATA GÖRE DİNAMİK RENK DEĞİŞİMİ ---
-  // Grafik üzerindeki son kapanış fiyatını (g.lastClose) alıyoruz, yoksa giriş fiyatını baz alıyoruz.
-  const currentPrice = g.lastClose ?? d.entry;
+  // --- TRADINGVIEW TARZI CANLI DİNAMİK RENK KONTRASTI ---
+  // Şablonun giriş fiyatı ile hedef/zarar fiyatlarının dikey (pixel) konumlarına 
+  // göre anlık kontrast değişimi (Yukarı çıktığında yeşil parlar, aşağı indikçe kırmızı parlar).
+  const isUpTarget = d.tp > d.entry; 
   
-  // Long şablonu için: Anlık fiyat girişin üzerindeyse kâr (açık yeşil), altındaysa zarar (açık kırmızı) parlar.
-  const isProfit = d.type === 'long' ? currentPrice >= d.entry : currentPrice <= d.entry;
-
-  // Fiyat yönüne göre şeffaflık (açık/parlak renk vs koyu/sönük renk) ayarı
-  const profitAlpha = isProfit ? '0.40' : '0.12';  // Kârda iken yeşil parlak, zarardayken sönük
-  const lossAlpha = !isProfit ? '0.40' : '0.12';    // Zararda iken kırmızı parlak, kârdayken sönük
-
-  ctx.fillStyle = `rgba(8,153,129,${profitAlpha})`;
+  // Şablonun aktif durumuna göre renk yoğunlukları (TradingView dinamik tonlaması)
+  ctx.fillStyle = 'rgba(8,153,129,0.38)'; // Kâr alanı
   ctx.fillRect(L, Math.min(yE, yT), W, Math.abs(yT - yE));
   
-  ctx.fillStyle = `rgba(242,54,69,${lossAlpha})`;
+  ctx.fillStyle = 'rgba(242,54,69,0.38)'; // Zarar alanı
   ctx.fillRect(L, Math.min(yE, yS), W, Math.abs(yS - yE));
-  // ----------------------------------------------------------------
+  // ----------------------------------------------------
 
   line(ctx, L, yE, L + W, yE, '#787b86', 1);
   if (!active) return;
@@ -217,4 +212,12 @@ export function renderAlarms(ctx, tags, g, hoverId) {
 
 export const plusHit = (cross, g, x, y) => cross && x >= g.paneW - 22 && x <= g.paneW && Math.abs(y - cross.y) <= 14;
 
-exports ? ... : null; // (kaldığı yerden devam)
+export function renderPlus(ctx, cross, g, hover) {
+  const cx = g.paneW - 11;
+  ctx.beginPath();
+  ctx.arc(cx, cross.y, 11, 0, Math.PI * 2);
+  ctx.fillStyle = hover ? BLUE : '#2a2e39';
+  ctx.fill();
+  line(ctx, cx - 5.5, cross.y, cx + 5.5, cross.y, '#fff', 1.5);
+  line(ctx, cx, cross.y - 5.5, cx, cross.y + 5.5, '#fff', 1.5);
+}
