@@ -14,6 +14,13 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+// API isteklerinin doğru adrese (göreceli veya gerekirse tam port/domain adresine) gitmesini sağlayan yardımcı
+const getApiUrl = (endpoint) => {
+  // Eğer yerelde (localhost) çalışıyorsak direkt /api kullanabiliriz (craco proxy yakalar)
+  // Canlı ortamda ise doğrudan /api isteği atılır. Eğer backend farklı bir portta veya alan adındaysa buraya yazılabilir.
+  return endpoint;
+};
+
 // Telefonda veya tarayıcıda bildirim izni isteyip abone olma
 export async function subscribeUserToPush() {
   if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
@@ -38,8 +45,8 @@ export async function subscribeUserToPush() {
 
     const registration = await navigator.serviceWorker.ready;
     
-    // 2. Backend'den VAPID public key'i çekme (JSON garantili istek)
-    const res = await fetch('/api/push/public-key', {
+    // 2. Backend'den VAPID public key'i çekme
+    const res = await fetch(getApiUrl('/api/push/public-key'), {
       method: 'GET',
       headers: {
         'Accept': 'application/json',
@@ -50,11 +57,16 @@ export async function subscribeUserToPush() {
     
     const textData = await res.text();
     
+    // Yanıtın gerçekten JSON olup olmadığını ve HTML dönüp dönmediğini kontrol et
+    if (textData.trim().startsWith('<') || res.headers.get('content-type')?.includes('text/html')) {
+      throw new Error("API, JSON yerine HTML döndürdü. Backend sunucusu isteği karşılamıyor veya rota bulunamadı.");
+    }
+    
     let data;
     try {
       data = JSON.parse(textData);
     } catch (e) {
-      throw new Error("API JSON yerine HTML döndürdü. İstek yönlendirmesi (proxy/router) hatalı olabilir.");
+      throw new Error("API yanıtı JSON formatında ayrıştırılamadı.");
     }
     
     if (!data.public_key) {
@@ -70,7 +82,7 @@ export async function subscribeUserToPush() {
     });
 
     // 4. Aboneliği backend'e kaydetme
-    const subRes = await fetch('/api/push/subscribe', {
+    const subRes = await fetch(getApiUrl('/api/push/subscribe'), {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -95,7 +107,7 @@ export async function subscribeUserToPush() {
 // Test bildirimi tetikleme fonksiyonu
 export async function sendTestNotification(message = "Epochveras test bildirimi çalışıyor!") {
   try {
-    const res = await fetch('/api/push/send-test', {
+    const res = await fetch(getApiUrl('/api/push/send-test'), {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
@@ -105,13 +117,11 @@ export async function sendTestNotification(message = "Epochveras test bildirimi 
     });
     
     const textData = await res.text();
-    let data;
-    try {
-      data = JSON.parse(textData);
-    } catch (e) {
-      throw new Error("API JSON yerine HTML döndürdü.");
+    if (textData.trim().startsWith('<')) {
+      throw new Error("API, JSON yerine HTML döndürdü.");
     }
 
+    let data = JSON.parse(textData);
     if (res.ok) {
       alert("Test bildirimi gönderildi!");
     } else {
