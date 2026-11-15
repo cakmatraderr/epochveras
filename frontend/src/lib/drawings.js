@@ -58,15 +58,23 @@ function renderPosition(ctx, d, g, prec, active) {
   const L = Math.min(x1, x2);
   const W = Math.abs(x2 - x1);
 
-  // --- ŞABLONUN YÖNÜNE VE KONUMUNA GÖRE DİNAMİK RENK ---
-  const isTargetAbove = yT < yE; 
+  // --- TRADINGVIEW TARZI ANLIK FİYATA GÖRE DİNAMİK RENK DEĞİŞİMİ ---
+  // Grafik üzerindeki son kapanış fiyatını (g.lastClose) alıyoruz, yoksa giriş fiyatını baz alıyoruz.
+  const currentPrice = g.lastClose ?? d.entry;
+  
+  // Long şablonu için: Anlık fiyat girişin üzerindeyse kâr (açık yeşil), altındaysa zarar (açık kırmızı) parlar.
+  const isProfit = d.type === 'long' ? currentPrice >= d.entry : currentPrice <= d.entry;
 
-  ctx.fillStyle = isTargetAbove ? 'rgba(8,153,129,0.28)' : 'rgba(242,54,69,0.28)';
+  // Fiyat yönüne göre şeffaflık (açık/parlak renk vs koyu/sönük renk) ayarı
+  const profitAlpha = isProfit ? '0.40' : '0.12';  // Kârda iken yeşil parlak, zarardayken sönük
+  const lossAlpha = !isProfit ? '0.40' : '0.12';    // Zararda iken kırmızı parlak, kârdayken sönük
+
+  ctx.fillStyle = `rgba(8,153,129,${profitAlpha})`;
   ctx.fillRect(L, Math.min(yE, yT), W, Math.abs(yT - yE));
   
-  ctx.fillStyle = !isTargetAbove ? 'rgba(8,153,129,0.28)' : 'rgba(242,54,69,0.28)';
+  ctx.fillStyle = `rgba(242,54,69,${lossAlpha})`;
   ctx.fillRect(L, Math.min(yE, yS), W, Math.abs(yS - yE));
-  // ----------------------------------------------------
+  // ----------------------------------------------------------------
 
   line(ctx, L, yE, L + W, yE, '#787b86', 1);
   if (!active) return;
@@ -209,12 +217,4 @@ export function renderAlarms(ctx, tags, g, hoverId) {
 
 export const plusHit = (cross, g, x, y) => cross && x >= g.paneW - 22 && x <= g.paneW && Math.abs(y - cross.y) <= 14;
 
-export function renderPlus(ctx, cross, g, hover) {
-  const cx = g.paneW - 11;
-  ctx.beginPath();
-  ctx.arc(cx, cross.y, 11, 0, Math.PI * 2);
-  ctx.fillStyle = hover ? BLUE : '#2a2e39';
-  ctx.fill();
-  line(ctx, cx - 5.5, cross.y, cx + 5.5, cross.y, '#fff', 1.5);
-  line(ctx, cx, cross.y - 5.5, cx, cross.y + 5.5, '#fff', 1.5);
-}
+exports ? ... : null; // (kaldığı yerden devam)
