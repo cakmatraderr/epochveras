@@ -1,9 +1,14 @@
+// src/lib/pushService.js
+
+/**
+ * VAPID public anahtarını Base64 URL formatından tarayıcının (özellikle iOS Safari'nin) 
+ * zorunlu koştuğu 65 baytlık P-256 Uint8Array formatına dönüştürür.
+ */
 function urlBase64ToUint8Array(base64String) {
   if (!base64String || typeof base64String !== 'string') {
     throw new Error("Geçersiz VAPID anahtarı formatı.");
   }
   
-  // Olası tırnak ve boşluk kalıntılarını temizle
   let cleaned = base64String.trim().replace(/^["'](.+)["']$/, '$1').replace(/['"]+/g, '');
   const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
   const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
@@ -45,7 +50,6 @@ export async function subscribeUserToPush() {
 
   const registration = await navigator.serviceWorker.ready;
   
-  // Backend'den public key'i al
   const response = await fetch('/api/push/public-key');
   if (!response.ok) {
     throw new Error("VAPID public key sunucudan alınamadı.");
@@ -56,13 +60,11 @@ export async function subscribeUserToPush() {
   
   const convertedVapidKey = urlBase64ToUint8Array(rawPublicKey);
 
-  // Push aboneliğini oluştur
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: convertedVapidKey
   });
 
-  // Aboneliği backend veritabanına kaydet
   await fetch('/api/push/subscribe', {
     method: 'POST',
     headers: {
@@ -72,4 +74,23 @@ export async function subscribeUserToPush() {
   });
 
   return subscription;
+}
+
+/**
+ * Backend'e test bildirimi tetiklemesi için istek gönderir.
+ */
+export async function sendTestNotification(message = "Epochveras test bildirimi başarılı!") {
+  const response = await fetch('/api/push/send-test', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ message }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Test bildirimi gönderilemedi.");
+  }
+
+  return await response.json();
 }
