@@ -6,17 +6,15 @@ const BLUE = '#2962ff';
 const ALERT = '#ff9800';
 const FONT = '12px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif';
 
-/* --- TABLET UYUMLU BÜYÜTÜLMÜŞ TUTMA UÇLARI (HANDLES) --- */
 const handle = (ctx, x, y) => {
   ctx.beginPath();
-  ctx.arc(x, y, 9, 0, Math.PI * 2); // Uç nokta yarıçapı 9px yapıldı
-  ctx.fillStyle = 'rgba(41, 98, 255, 0.25)'; // Parmağın rahat görmesi için hafif mavi dolgu
+  ctx.arc(x, y, 9, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(41, 98, 255, 0.25)';
   ctx.fill();
   ctx.lineWidth = 2.5;
   ctx.strokeStyle = BLUE;
   ctx.stroke();
   
-  // Merkezine minik net bir nokta
   ctx.beginPath();
   ctx.arc(x, y, 3.5, 0, Math.PI * 2);
   ctx.fillStyle = '#fff';
@@ -58,10 +56,22 @@ function renderPosition(ctx, d, g, prec, active) {
   if ([yE, yT, yS].some((v) => v == null)) return;
   const L = Math.min(x1, x2);
   const W = Math.abs(x2 - x1);
-  ctx.fillStyle = 'rgba(8,153,129,0.22)';
+
+  // --- TRADINGVIEW TARZI DİNAMİK RENK GEÇİŞİ ---
+  // Grafik üzerindeki son fiyat (current price) gösterge çubuğundan veya g.py üzerinden alınabilir.
+  // Fiyat giriş seviyesinin üzerindeyse kâr alanı parlar, altındaysa zarar alanı parlar.
+  const currentY = g.py ? g.py(g.currentPrice) : null;
+  const isProfit = currentY != null ? (d.type === 'long' ? currentY <= yE : currentY >= yE) : true;
+
+  const profitAlpha = isProfit ? '0.32' : '0.12';
+  const lossAlpha = !isProfit ? '0.32' : '0.12';
+
+  ctx.fillStyle = `rgba(8,153,129,${profitAlpha})`;
   ctx.fillRect(L, Math.min(yE, yT), W, Math.abs(yT - yE));
-  ctx.fillStyle = 'rgba(242,54,69,0.22)';
+  ctx.fillStyle = `rgba(242,54,69,${lossAlpha})`;
   ctx.fillRect(L, Math.min(yE, yS), W, Math.abs(yS - yE));
+  // ---------------------------------------------
+
   line(ctx, L, yE, L + W, yE, '#787b86', 1);
   if (!active) return;
   const cx = L + W / 2;
@@ -106,8 +116,7 @@ export function renderDrawing(ctx, d, g, prec, active) {
   }
 }
 
-/* --- DOKUNMATİK EKRAN İÇİN GENİŞLETİLMİŞ HİT TEST TOLERANSLARI --- */
-const near = (ax, ay, bx, by, r = 22) => Math.hypot(ax - bx, ay - by) <= r; // Dokunma yarıçapı 22px
+const near = (ax, ay, bx, by, r = 22) => Math.hypot(ax - bx, ay - by) <= r;
 const segDist = (px, py, x1, y1, x2, y2) => {
   const dx = x2 - x1; const dy = y2 - y1;
   const l2 = dx * dx + dy * dy || 1;
@@ -121,7 +130,7 @@ export function hitDrawing(d, g, x, y) {
     const x2 = g.tx(d.p2.t); const y2 = g.py(d.p2.p);
     if (near(x, y, x1, y1)) return 'p1';
     if (near(x, y, x2, y2)) return 'p2';
-    return segDist(x, y, x1, y1, x2, y2) <= 16 ? 'body' : null; // Çizgi gövde toleransı 16px
+    return segDist(x, y, x1, y1, x2, y2) <= 16 ? 'body' : null;
   }
   if (d.type === 'hray') {
     const x1 = g.tx(d.p1.t); const y1 = g.py(d.p1.p);
