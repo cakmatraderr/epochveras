@@ -6,14 +6,21 @@ const BLUE = '#2962ff';
 const ALERT = '#ff9800';
 const FONT = '12px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif';
 
+/* --- TABLET UYUMLU BÜYÜTÜLMÜŞ TUTMA UÇLARI (HANDLES) --- */
 const handle = (ctx, x, y) => {
   ctx.beginPath();
-  ctx.arc(x, y, 5, 0, Math.PI * 2);
-  ctx.fillStyle = '#000';
+  ctx.arc(x, y, 9, 0, Math.PI * 2); // Uç nokta yarıçapı 9px yapıldı
+  ctx.fillStyle = 'rgba(41, 98, 255, 0.25)'; // Parmağın rahat görmesi için hafif mavi dolgu
   ctx.fill();
-  ctx.lineWidth = 1.5;
+  ctx.lineWidth = 2.5;
   ctx.strokeStyle = BLUE;
   ctx.stroke();
+  
+  // Merkezine minik net bir nokta
+  ctx.beginPath();
+  ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
 };
 
 const box = (ctx, lines, cx, y, bg, anchor = 'top') => {
@@ -99,7 +106,8 @@ export function renderDrawing(ctx, d, g, prec, active) {
   }
 }
 
-const near = (ax, ay, bx, by, r = 7) => Math.hypot(ax - bx, ay - by) <= r;
+/* --- DOKUNMATİK EKRAN İÇİN GENİŞLETİLMİŞ HİT TEST TOLERANSLARI --- */
+const near = (ax, ay, bx, by, r = 22) => Math.hypot(ax - bx, ay - by) <= r; // Dokunma yarıçapı 22px
 const segDist = (px, py, x1, y1, x2, y2) => {
   const dx = x2 - x1; const dy = y2 - y1;
   const l2 = dx * dx + dy * dy || 1;
@@ -113,12 +121,12 @@ export function hitDrawing(d, g, x, y) {
     const x2 = g.tx(d.p2.t); const y2 = g.py(d.p2.p);
     if (near(x, y, x1, y1)) return 'p1';
     if (near(x, y, x2, y2)) return 'p2';
-    return segDist(x, y, x1, y1, x2, y2) <= 5 ? 'body' : null;
+    return segDist(x, y, x1, y1, x2, y2) <= 16 ? 'body' : null; // Çizgi gövde toleransı 16px
   }
   if (d.type === 'hray') {
     const x1 = g.tx(d.p1.t); const y1 = g.py(d.p1.p);
     if (near(x, y, x1, y1)) return 'p1';
-    return Math.abs(y - y1) <= 5 && x >= x1 ? 'body' : null;
+    return Math.abs(y - y1) <= 16 && x >= x1 ? 'body' : null;
   }
   const { x1, x2, yE, yT, yS } = posGeom(d, g);
   if (near(x, y, x1, yT)) return 'tp';
@@ -160,7 +168,7 @@ export function renderRuler(ctx, r, g, prec) {
 
 export const alarmHit = (tags, g, x, y) => {
   if (x < g.paneW - 22 || x > g.paneW) return null;
-  return tags.find((a) => { const yy = g.py(a.price); return yy != null && Math.abs(y - yy) <= 8; }) || null;
+  return tags.find((a) => { const yy = g.py(a.price); return yy != null && Math.abs(y - yy) <= 14; }) || null;
 };
 
 export function renderAlarms(ctx, tags, g, hoverId) {
@@ -193,14 +201,14 @@ export function renderAlarms(ctx, tags, g, hoverId) {
   });
 }
 
-export const plusHit = (cross, g, x, y) => cross && x >= g.paneW - 22 && x <= g.paneW && Math.abs(y - cross.y) <= 9;
+export const plusHit = (cross, g, x, y) => cross && x >= g.paneW - 22 && x <= g.paneW && Math.abs(y - cross.y) <= 14;
 
 export function renderPlus(ctx, cross, g, hover) {
   const cx = g.paneW - 11;
   ctx.beginPath();
-  ctx.arc(cx, cross.y, 9, 0, Math.PI * 2);
+  ctx.arc(cx, cross.y, 11, 0, Math.PI * 2);
   ctx.fillStyle = hover ? BLUE : '#2a2e39';
   ctx.fill();
-  line(ctx, cx - 4.5, cross.y, cx + 4.5, cross.y, '#fff', 1.5);
-  line(ctx, cx, cross.y - 4.5, cx, cross.y + 4.5, '#fff', 1.5);
+  line(ctx, cx - 5.5, cross.y, cx + 5.5, cross.y, '#fff', 1.5);
+  line(ctx, cx, cross.y - 5.5, cx, cross.y + 5.5, '#fff', 1.5);
 }
