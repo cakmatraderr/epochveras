@@ -1,11 +1,9 @@
 function urlBase64ToUint8Array(base64String) {
   if (!base64String || typeof base64String !== 'string') {
-    throw new Error("VAPID anahtarı metin formatında değil.");
+    throw new Error("Gelen veri metin değil: " + typeof base64String);
   }
   
-  // Tüm boşlukları, tırnakları ve gereksiz karakterleri temizle
   let cleaned = base64String.trim().replace(/^["'](.+)["']$/, '$1').replace(/['"]+/g, '');
-  
   const padding = '='.repeat((4 - (cleaned.length % 4)) % 4);
   const base64 = (cleaned + padding).replace(/-/g, '+').replace(/_/g, '/');
   
@@ -13,7 +11,7 @@ function urlBase64ToUint8Array(base64String) {
   try {
     rawData = window.atob(base64);
   } catch (e) {
-    throw new Error("Base64 çözme hatası: " + base64);
+    throw new Error("Base64 çözülemedi. Gelen ham veri: " + base64String);
   }
 
   const outputArray = new Uint8Array(rawData.length);
@@ -21,9 +19,9 @@ function urlBase64ToUint8Array(base64String) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   
-  // P-256 public key tam olarak 65 bayt olmalıdır
+  // Boyut uyuşmazlığında hatayı ham veri ile göster ki anlatalım
   if (outputArray.length !== 65) {
-    throw new Error("Geçersiz anahtar uzunluğu (" + outputArray.length + " bayt). 65 bayt olmalı.");
+    throw new Error(`Anahtar boyutu hatalı (${outputArray.length} bayt, 65 olmalı). Gelen: ${base64String}`);
   }
 
   return outputArray;
@@ -31,7 +29,6 @@ function urlBase64ToUint8Array(base64String) {
 
 const getApiUrl = (endpoint) => {
   const EXTERNAL_BACKEND = 'https://epochveras.onrender.com'; 
-
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
     return `http://localhost:8000${endpoint}`;
   }
@@ -74,6 +71,10 @@ export async function subscribeUserToPush() {
     }
 
     const rawKey = jsonResponse.public_key || jsonResponse.key || jsonResponse.vapid_public_key || textData;
+    
+    // Ham anahtarı ve uzunluğunu ekranda uyarı olarak gösterelim
+    alert("Sunucudan gelen anahtar: " + String(rawKey).substring(0, 20) + "... (Uzunluk: " + String(rawKey).length + ")");
+
     const convertedKey = urlBase64ToUint8Array(rawKey);
 
     const subscription = await registration.pushManager.subscribe({
