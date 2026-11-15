@@ -6,6 +6,7 @@ const BLUE = '#2962ff';
 const ALERT = '#ff9800';
 const FONT = '12px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, Ubuntu, sans-serif';
 
+/* --- TABLET UYUMLU BÜYÜTÜLMÜŞ TUTMA UÇLARI (HANDLES) --- */
 const handle = (ctx, x, y) => {
   ctx.beginPath();
   ctx.arc(x, y, 9, 0, Math.PI * 2);
@@ -57,20 +58,18 @@ function renderPosition(ctx, d, g, prec, active) {
   const L = Math.min(x1, x2);
   const W = Math.abs(x2 - x1);
 
-  // --- TRADINGVIEW TARZI DİNAMİK RENK GEÇİŞİ ---
-  // Grafik üzerindeki son fiyat (current price) gösterge çubuğundan veya g.py üzerinden alınabilir.
-  // Fiyat giriş seviyesinin üzerindeyse kâr alanı parlar, altındaysa zarar alanı parlar.
-  const currentY = g.py ? g.py(g.currentPrice) : null;
-  const isProfit = currentY != null ? (d.type === 'long' ? currentY <= yE : currentY >= yE) : true;
+  // --- TRADINGVIEW TARZI ANLIK FİYATA GÖRE DİNAMİK RENK GEÇİŞİ ---
+  const currentPrice = g.lastClose ?? d.entry;
+  const isProfit = d.type === 'long' ? currentPrice >= d.entry : currentPrice <= d.entry;
 
-  const profitAlpha = isProfit ? '0.32' : '0.12';
-  const lossAlpha = !isProfit ? '0.32' : '0.12';
+  const profitAlpha = isProfit ? '0.35' : '0.10';
+  const lossAlpha = !isProfit ? '0.35' : '0.10';
 
   ctx.fillStyle = `rgba(8,153,129,${profitAlpha})`;
   ctx.fillRect(L, Math.min(yE, yT), W, Math.abs(yT - yE));
   ctx.fillStyle = `rgba(242,54,69,${lossAlpha})`;
   ctx.fillRect(L, Math.min(yE, yS), W, Math.abs(yS - yE));
-  // ---------------------------------------------
+  // -------------------------------------------------------------
 
   line(ctx, L, yE, L + W, yE, '#787b86', 1);
   if (!active) return;
@@ -116,6 +115,7 @@ export function renderDrawing(ctx, d, g, prec, active) {
   }
 }
 
+/* --- DOKUNMATİK EKRAN İÇİN GENİŞLETİLMİŞ HİT TEST TOLERANSLARI --- */
 const near = (ax, ay, bx, by, r = 22) => Math.hypot(ax - bx, ay - by) <= r;
 const segDist = (px, py, x1, y1, x2, y2) => {
   const dx = x2 - x1; const dy = y2 - y1;
