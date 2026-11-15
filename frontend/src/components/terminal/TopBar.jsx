@@ -8,7 +8,13 @@ const FAV = ['1m', '5m', '15m', '30m', '1h', '4h', '1d'];
 export const TopBar = ({ symbol, tf, setTf, onSymbol, onIndicators, onAlert, live }) => (
   <header className="ev-topbar" data-testid="top-bar">
     <div className="flex items-center gap-2 pr-3">
-      <div className="ev-logo" data-testid="app-logo">E</div>
+      {/* Özel Siyah-Beyaz Logo İkonu */}
+      <img 
+        src="/icon-512.png" 
+        alt="Epochveras Logo" 
+        className="h-7 w-7 rounded-md object-contain" 
+        data-testid="app-logo"
+      />
       <span className="text-[15px] font-semibold tracking-tight text-[#d1d4dc]">Epochveras</span>
     </div>
     <span className="ev-sep" />
