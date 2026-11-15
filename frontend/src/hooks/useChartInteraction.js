@@ -29,11 +29,31 @@ function applyDrag(R, g, x, y) {
   else Object.assign(d, { t1: o.t1 + dt, t2: o.t2 + dt, entry: o.entry + dp, tp: o.tp + dp, sl: o.sl + dp });
 }
 
+/* --- TABLET UYUMLU GENİŞLETİLMİŞ ÇİZİM YAKALAMA (HIT TEST) --- */
 function findHit(R, g, x, y) {
+  let best = null;
+  let minDist = 22; // Dokunmatik ekranlar için 22 piksel yakalama yarıçapı
+
   for (let i = R.drawings.length - 1; i >= 0; i -= 1) {
-    const h = hitDrawing(R.drawings[i], g, x, y);
-    if (h) return { d: R.drawings[i], handle: h };
+    const drawing = R.drawings[i];
+    const h = hitDrawing(drawing, g, x, y);
+    if (h) {
+      // Çizimin merkezine veya yakalanan noktaya olan mesafesini hesapla
+      return { d: drawing, handle: h };
+    }
   }
+
+  // Eğer doğrudan çizgi üstü kaçtıysa, yakınlardaki uç noktalara (handle) bak
+  for (let i = R.drawings.length - 1; i >= 0; i -= 1) {
+    const d = R.drawings[i];
+    if (d.type === 'trend' && d.p1 && d.p2) {
+      const p1Screen = { x: g.xp(d.p1.t), y: g.yp(d.p1.p) };
+      const p2Screen = { x: g.xp(d.p2.t), y: g.yp(d.p2.p) };
+      if (Math.hypot(p1Screen.x - x, p1Screen.y - y) <= minDist) return { d, handle: 'p1' };
+      if (Math.hypot(p2Screen.x - x, p2Screen.y - y) <= minDist) return { d, handle: 'p2' };
+    }
+  }
+
   return null;
 }
 
