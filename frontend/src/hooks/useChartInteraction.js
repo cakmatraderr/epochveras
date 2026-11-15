@@ -29,31 +29,11 @@ function applyDrag(R, g, x, y) {
   else Object.assign(d, { t1: o.t1 + dt, t2: o.t2 + dt, entry: o.entry + dp, tp: o.tp + dp, sl: o.sl + dp });
 }
 
-/* --- TABLET UYUMLU GENİŞLETİLMİŞ ÇİZİM YAKALAMA (HIT TEST) --- */
 function findHit(R, g, x, y) {
-  let best = null;
-  let minDist = 22; // Dokunmatik ekranlar için 22 piksel yakalama yarıçapı
-
   for (let i = R.drawings.length - 1; i >= 0; i -= 1) {
-    const drawing = R.drawings[i];
-    const h = hitDrawing(drawing, g, x, y);
-    if (h) {
-      // Çizimin merkezine veya yakalanan noktaya olan mesafesini hesapla
-      return { d: drawing, handle: h };
-    }
+    const h = hitDrawing(R.drawings[i], g, x, y);
+    if (h) return { d: R.drawings[i], handle: h };
   }
-
-  // Eğer doğrudan çizgi üstü kaçtıysa, yakınlardaki uç noktalara (handle) bak
-  for (let i = R.drawings.length - 1; i >= 0; i -= 1) {
-    const d = R.drawings[i];
-    if (d.type === 'trend' && d.p1 && d.p2) {
-      const p1Screen = { x: g.xp(d.p1.t), y: g.yp(d.p1.p) };
-      const p2Screen = { x: g.xp(d.p2.t), y: g.yp(d.p2.p) };
-      if (Math.hypot(p1Screen.x - x, p1Screen.y - y) <= minDist) return { d, handle: 'p1' };
-      if (Math.hypot(p2Screen.x - x, p2Screen.y - y) <= minDist) return { d, handle: 'p2' };
-    }
-  }
-
   return null;
 }
 
@@ -66,7 +46,7 @@ export function useChartInteraction(R, wrap, canvas, cb) {
     const el = wrap.current;
     const rel = (e) => {
       const r = R.box.getBoundingClientRect();
-      const p = e.touches ? e.touches[0] : e;
+      const p = e.touches ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : e);
       return { x: p.clientX - r.left, y: p.clientY - r.top };
     };
     const select = (id) => { R.sel = id; R.cb.onSelect(id); };
@@ -115,19 +95,26 @@ export function useChartInteraction(R, wrap, canvas, cb) {
         R.cb.onAddAlert(+p.toFixed(R.prec));
         return true;
       }
+      
       const hit = findHit(R, g, x, y);
       if (hit) {
         select(hit.d.id);
         R.drag = { id: hit.d.id, handle: hit.handle, orig: clone(hit.d), start: pointAt(R, g, x, y, false), moved: false };
         return true;
       }
-      if (R.sel) select(null);
+      
+      // Boş bir yere tıklandığında seçimi temizle
+      if (R.sel) {
+        select(null);
+        return true;
+      }
       return false;
     };
 
     const onPointerDown = (e) => {
       R.swallow = false;
-      if (e.button !== 0 || !R.chart || e.target.closest('.ev-selbar, .ev-ind-row, .ev-mtf')) return;
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      if (!R.chart || e.target.closest('.ev-selbar, .ev-ind-row, .ev-mtf')) return;
       const g = geom(R);
       if (!g) return;
       const { x, y } = rel(e);
@@ -166,7 +153,7 @@ export function useChartInteraction(R, wrap, canvas, cb) {
         R.drag = null;
       } else if (R.draft && R.draft.dragging) {
         R.draft.dragging = false;
-        const { x, y } = rel(e.changedTouches ? e.changedTouches[0] : e);
+        const { x, y } = rel(e);
         if (Math.hypot(x - R.draft.downX, y - R.draft.downY) > 8) commit(R.draft);
       }
     };
