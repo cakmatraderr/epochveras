@@ -13,40 +13,46 @@ function urlBase64ToUint8Array(base64String) {
 
 // Telefonda veya tarayıcıda bildirim izni isteyip abone olma
 export async function subscribeUserToPush() {
+  // 1. HTTPS ve Push Desteği Kontrolü
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+    alert("HATA: Push bildirimleri yalnızca HTTPS (güvenli) bağlantılar üzerinden çalışır! Mevcut protokol: " + window.location.protocol);
+    return false;
+  }
+
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     alert("Tarayıcınız veya bu mod push bildirimlerini desteklemiyor.");
     return false;
   }
 
   try {
-    // 1. Önce iOS Safari için açıkça bildirim izni penceresini tetikliyoruz
+    // 2. iOS Safari için açıkça bildirim izni isteme
     if (typeof window.Notification !== 'undefined') {
       const permission = await window.Notification.requestPermission();
       if (permission !== 'granted') {
-        alert("Bildirim izni kullanıcı tarafından reddedildi.");
+        alert("Bildirim izni kullanıcı tarafından reddedildi veya verilmedi. (Durum: " + permission + ")");
         return false;
       }
     }
 
     const registration = await navigator.serviceWorker.ready;
     
-    // 2. Backend'den VAPID public key'i çekiyoruz
+    // 3. Backend'den VAPID public key'i çekme
     const res = await fetch('/api/push/public-key');
     const data = await res.json();
     
     if (!data.public_key) {
-      throw new Error("VAPID public key alınamadı.");
+      throw new Error("Backend'den VAPID public key alınamadı.");
     }
 
     const convertedKey = urlBase64ToUint8Array(data.public_key);
 
-    // 3. Tarayıcı üzerinden push aboneliği oluşturuyoruz
+    // 4. Tarayıcı üzerinden push aboneliği oluşturma
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: convertedKey
     });
 
-    // 4. Aboneliği backend'e gönderip kaydediyoruz
+    // 5. Aboneliği backend'e kaydetme
     const subRes = await fetch('/api/push/subscribe', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -54,14 +60,14 @@ export async function subscribeUserToPush() {
     });
 
     if (subRes.ok) {
-      alert("Bildirimler başarıyla aktif edildi! Artık anlık uyarı alabileceksiniz.");
+      alert("Bildirimler başarıyla aktif edildi!");
       return true;
     } else {
-      throw new Error("Abonelik sunucuya kaydedilemedi.");
+      throw new Error("Abonelik sunucuya kaydedilemedi (Sunucu hatası).");
     }
   } catch (err) {
     console.error("Push aboneliği başarısız:", err);
-    alert("Bildirim izni alınamadı: " + (err.message || err));
+    alert("Hata detayı: " + (err.message || err));
     return false;
   }
 }
@@ -76,11 +82,12 @@ export async function sendTestNotification(message = "Epochveras test bildirimi 
     });
     const data = await res.json();
     if (res.ok) {
-      alert("Test bildirimi gönderildi! Cihazınızı kontrol edin.");
+      alert("Test bildirimi gönderildi!");
     } else {
-      alert("Test bildirimi gönderilemedi: " + (data.detail || "Bilinmeyen hata"));
+      alert("Test gönderilemedi: " + (data.detail || "Bilinmeyen hata"));
     }
   } catch (err) {
     console.error("Test bildirimi hatası:", err);
+    alert("Test isteği gönderilemedi: " + err.message);
   }
 }
