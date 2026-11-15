@@ -100,7 +100,7 @@ export default function App() {
     <>
       {ready && L && indApi.ind ? <Terminal L={L} set={set} indApi={indApi} /> : (
         <div className="ev-splash" data-testid="splash">
-          <div className="ev-logo h-10 w-10 text-[20px]">E</div>
+          <img src="/icon-512.png" alt="Epochveras Logo" className="h-12 w-12 rounded-lg object-contain mb-1" />
           <div className="mt-3 text-[15px] text-[#d1d4dc]">Epochveras</div>
           <div className="mt-1 text-[12px] text-[#787b86]">{err ? `Bağlantı hatası: ${err}` : 'Binance vadeli piyasaları yükleniyor…'}</div>
         </div>
