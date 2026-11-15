@@ -1,3 +1,12 @@
+// Yeni Service Worker'ın bekletilmeden hemen aktif olmasını sağla
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(clients.claim());
+});
+
 // /api/ ile başlayan tüm istekleri Service Worker denetiminden çıkar, doğrudan sunucuya bırak
 self.addEventListener('fetch', (event) => {
   if (event.request.url.includes('/api/')) {
