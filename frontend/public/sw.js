@@ -1,3 +1,10 @@
+// /api/ ile başlayan tüm istekleri Service Worker denetiminden çıkar, doğrudan sunucuya bırak
+self.addEventListener('fetch', (event) => {
+  if (event.request.url.includes('/api/')) {
+    return;
+  }
+});
+
 self.addEventListener('push', function(event) {
   let data = { title: 'Epochveras Alarm', body: 'Yeni bir piyasa uyarısı var!' };
   if (event.data) {
