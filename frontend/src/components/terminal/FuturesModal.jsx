@@ -78,7 +78,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
       <div className="ev-panel-title flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] select-none shrink-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm text-[#2962ff]">{symbol}</span>
-          <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
+          <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Data</span>
         </div>
         <div className="flex items-center gap-2">
           <button 
@@ -104,7 +104,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
           <div className="grid grid-cols-2 gap-3">
             {/* Fonlama Oranı (FR) */}
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
-              <div className="text-[#787b86] mb-1">Fonlama Oranı (FR)</div>
+              <div className="text-[#787b86] mb-1">Funding Rate</div>
               <div className={`text-sm font-semibold tabular-nums ${data.fundingRate >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
                 {data.fundingRate !== 0 ? (data.fundingRate > 0 ? `+${data.fundingRate.toFixed(4)}%` : `${data.fundingRate.toFixed(4)}%`) : '0.0000%'}
               </div>
