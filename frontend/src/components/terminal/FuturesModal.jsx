@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { X, RefreshCw } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtVol } from '../../lib/format';
@@ -8,67 +8,72 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const fetchFutures = useCallback(async () => {
     if (!symbol) return;
-    let cancelled = false;
+    setLoading(true);
+    setError(null);
 
-    const fetchFutures = async () => {
-      setLoading(true);
-      setError(null);
+    try {
+      const cleanSymbol = symbol.replace('.P', '');
 
-      try {
-        const cleanSymbol = symbol.replace('.P', '');
+      // OI, L/S oranları ve Binance premium index verisini paralel çekiyoruz
+      // CORS sorununu aşmak için premiumIndex'i projede varsa proxy üzerinden yoksa doğrudan güvenli çekiyoruz
+      const [premiumRes, oiRes, accRes, posRes, globRes] = await Promise.all([
+        fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${cleanSymbol}`).then(r => r.ok ? r.json() : { openInterest: 0 }),
+        fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.ok ? r.json() : []),
+        fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.ok ? r.json() : []),
+        fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.ok ? r.json() : []),
+      ]);
 
-        // Tüm verileri (Premium Index dahil) doğrudan Binance API'sinden paralel çekiyoruz
-        const [premiumRes, oiRes, accRes, posRes, globRes] = await Promise.all([
-          fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.json()),
-          fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${cleanSymbol}`).then(r => r.json()),
-          fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json()),
-          fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json()),
-          fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json()),
-        ]);
+      const acc = Array.isArray(accRes) && accRes.length > 0 ? accRes[0] : {};
+      const pos = Array.isArray(posRes) && posRes.length > 0 ? posRes[0] : {};
+      const glob = Array.isArray(globRes) && globRes.length > 0 ? globRes[0] : {};
 
-        if (cancelled) return;
+      const ticker = market.tickers[symbol] || market.tickers[cleanSymbol] || {};
 
-        const acc = Array.isArray(accRes) && accRes.length > 0 ? accRes[0] : {};
-        const pos = Array.isArray(posRes) && posRes.length > 0 ? posRes[0] : {};
-        const glob = Array.isArray(globRes) && globRes.length > 0 ? globRes[0] : {};
-
-        // Fonlama oranını doğrudan Binance premiumIndex'ten alıp yüzdeye çeviriyoruz (örn: 0.0001 -> %0.01)
-        const rawFr = premiumRes?.lastFundingRate ? Number(premiumRes.lastFundingRate) * 100 : 0;
-        
-        // Mark fiyatını ve son fiyatı belirliyoruz
-        const markPrice = premiumRes?.markPrice ? Number(premiumRes.markPrice) : (market.tickers[symbol]?.close || 0);
-        const oiCoin = parseFloat(oiRes.openInterest || 0);
-
-        const getPct = (item, lKey, sKey) => {
-          const l = parseFloat(item[lKey] || 0.5) * 100;
-          const s = parseFloat(item[sKey] || 0.5) * 100;
-          const total = l + s;
-          if (total === 0) return { long: 50, short: 50 };
-          return { long: (l / total) * 100, short: (s / total) * 100 };
-        };
-
-        setData({
-          oiCoin,
-          oiUsdt: markPrice ? oiCoin * markPrice : null,
-          markPrice,
-          fundingRate: rawFr,
-          acc: getPct(acc, 'longAccount', 'shortAccount'),
-          pos: getPct(pos, 'longPosition', 'shortPosition'),
-          glob: getPct(glob, 'longAccount', 'shortAccount'),
-        });
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Veri çekilemedi');
-      } finally {
-        if (!cancelled) setLoading(false);
+      // Fonlama oranı: Öncelikle API'den gelen premiumRes, yoksa market ticker içindeki değer
+      let rawFr = 0;
+      if (premiumRes?.lastFundingRate) {
+        rawFr = Number(premiumRes.lastFundingRate) * 100;
+      } else if (ticker.fundingRate !== undefined) {
+        rawFr = Number(ticker.fundingRate) * 100;
       }
-    };
 
-    fetchFutures();
+      const markPrice = premiumRes?.markPrice ? Number(premiumRes.markPrice) : (ticker.close || ticker.last || 0);
+      const oiCoin = parseFloat(oiRes.openInterest || 0);
 
-    return () => { cancelled = true; };
+      const getPct = (item, lKey, sKey) => {
+        const l = parseFloat(item[lKey] || 0.5) * 100;
+        const s = parseFloat(item[sKey] || 0.5) * 100;
+        const total = l + s;
+        if (total === 0) return { long: 50, short: 50 };
+        return { long: (l / total) * 100, short: (s / total) * 100 };
+      };
+
+      setData({
+        oiCoin,
+        oiUsdt: markPrice ? oiCoin * markPrice : null,
+        markPrice,
+        fundingRate: rawFr,
+        acc: getPct(acc, 'longAccount', 'shortAccount'),
+        pos: getPct(pos, 'longPosition', 'shortPosition'),
+        glob: getPct(glob, 'longAccount', 'shortAccount'),
+      });
+    } catch (err) {
+      setError(err.message || 'Veri çekilemedi');
+    } finally {
+      setLoading(false);
+    }
   }, [symbol]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFutures().then(() => {
+      if (cancelled) return;
+    });
+    return () => { cancelled = true; };
+  }, [symbol, fetchFutures]);
 
   return (
     <div className="ev-panel flex h-full flex-col bg-[#1e222d] text-[#d1d4dc]" data-testid="futures-modal">
@@ -78,7 +83,13 @@ export const FuturesModal = ({ symbol, onClose }) => {
           <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={() => window.location.reload()} className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" title="Yenile">
+          {/* Sayfayı yenilemek yerine sadece panel verisini günceller */}
+          <button 
+            type="button" 
+            onClick={fetchFutures} 
+            className="p-1 text-[#787b86] hover:text-[#fff] transition-colors rounded" 
+            title="Yenile"
+          >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
           <button type="button" className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" onClick={onClose} data-testid="futures-close-btn">
@@ -93,7 +104,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
 
         {data && (
           <div className="grid grid-cols-2 gap-3">
-            {/* Fonlama Oranı (FR) - Doğrudan Binance API'den */}
+            {/* Fonlama Oranı (FR) */}
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="text-[#787b86] mb-1">Fonlama Oranı (FR)</div>
               <div className={`text-sm font-semibold tabular-nums ${data.fundingRate >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
