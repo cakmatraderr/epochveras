@@ -5,20 +5,21 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchFuturesData = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`).then(r => r.json());
-      setData(res);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    let alive = true;
+    const fetchFuturesData = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`).then(r => r.json());
+        if (alive) setData(res);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
     fetchFuturesData();
+    return () => { alive = false; };
   }, [symbol]);
 
   return (
@@ -30,7 +31,18 @@ export const FuturesModal = ({ symbol, onClose }) => {
             <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={fetchFuturesData} className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" title="Yenile">
+            <button 
+              onClick={async () => {
+                setLoading(true);
+                try {
+                  const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`).then(r => r.json());
+                  setData(res);
+                } catch (e) { console.error(e); }
+                finally { setLoading(false); }
+              }} 
+              className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" 
+              title="Yenile"
+            >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             </button>
             <button onClick={onClose} className="p-1 text-[#787b86] hover:text-[#fff] transition-colors">
