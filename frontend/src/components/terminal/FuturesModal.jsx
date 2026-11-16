@@ -3,7 +3,9 @@ import { X, RefreshCw } from 'lucide-react';
 
 export const FuturesModal = ({ symbol, onClose }) => {
   const [data, setData] = useState(null);
-  const [lsData, setLsData] = useState(null);
+  const [lsAccount, setLsAccount] = useState(null);
+  const [lsPosition, setLsPosition] = useState(null);
+  const [globalRatio, setGlobalRatio] = useState(null);
   const [oiData, setOiData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -17,17 +19,24 @@ export const FuturesModal = ({ symbol, onClose }) => {
         // 1. Premium Index (Funding Rate & Mark Price)
         const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.json());
         
-        // 2. Long/Short Ratio (Hesap Oranları)
-        const lsRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());  // 3. Open Interest (Açık Pozisyon) const oiRes = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${cleanSymbol}`).then(r => r.json());
+        // 2. LS Account Ratio (Hesap Oranı)
+        const accRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
+
+        // 3. LS Position Ratio (Pozisyon Oranı)
+        const posRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
+
+        // 4. Global Long/Short Ratio (Tüm hesaplar genel oranı)
+        const globRes = await fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
+
+        // 5. Open Interest (Açık Pozisyon)
+        const oiRes = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${cleanSymbol}`).then(r => r.json());
 
         if (alive) {
           setData(res);
-          if (lsRes && lsRes.length > 0) {
-            setLsData(lsRes[0]);
-          }
-          if (oiRes) {
-            setOiData(oiRes);
-          }
+          if (accRes && accRes.length > 0) setLsAccount(accRes[0]);
+          if (posRes && posRes.length > 0) setLsPosition(posRes[0]);
+          if (globRes && globRes.length > 0) setGlobalRatio(globRes[0]);
+          if (oiRes) setOiData(oiRes);
         }
       } catch (e) {
         console.error(e);
@@ -39,8 +48,19 @@ export const FuturesModal = ({ symbol, onClose }) => {
     return () => { alive = false; };
   }, [symbol]);
 
-  const longRatio = lsData ? Number(lsData.longAccount) * 100 : 50.0;
-  const shortRatio = lsData ? Number(lsData.shortAccount) * 100 : 50.0;
+  // Yüzde hesaplama yardımcıları
+  const getPct = (item) => {
+    if (!item) return { long: 50, short: 50 };
+    const l = Number(item.longAccount || item.longPosition || 0.5) * 100;
+    const s = Number(item.shortAccount || item.shortPosition || 0.5) * 100;
+    const total = l + s;
+    if (total === 0) return { long: 50, short: 50 };
+    return { long: (l / total) * 100, short: (s / total) * 100 };
+  };
+
+  const accPct = getPct(lsAccount);
+  const posPct = getPct(lsPosition);
+  const globPct = getPct(globalRatio);
 
   return (
     <div className="w-full bg-[#1e222d] border-l border-[#2a2e39] flex flex-col h-full text-[#d1d4dc]">
@@ -55,4 +75,104 @@ export const FuturesModal = ({ symbol, onClose }) => {
               setLoading(true);
               try {
                 const cleanSymbol = symbol.replace('.P', '');
-                const res = await fetch(`
+                const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.json());
+                const accRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
+                const posRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
+                const globRes = await fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
+                const oiRes = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${cleanSymbol}`).then(r => r.json());
+
+                setData(res);
+                if (accRes && accRes.length > 0) setLsAccount(accRes[0]);
+                if (posRes && posRes.length > 0) setLsPosition(posRes[0]);
+                if (globRes && globRes.length > 0) setGlobalRatio(globRes[0]);
+                if (oiRes) setOiData(oiRes);
+              } catch (e) { console.error(e); }
+              finally { setLoading(false); }
+            }} 
+            className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" 
+            title="Yenile"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={onClose} className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" title="Kapat">
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+        {loading && !data ? (
+          <div className="py-8 text-center text-[#787b86]">Yükleniyor...</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {/* Fonlama Oranı */}
+            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="text-[#787b86] mb-1">Fonlama Oranı (Funding)</div>
+              <div className="text-sm font-semibold text-[#089981]">
+                {data?.lastFundingRate ? `${(Number(data.lastFundingRate) * 100).toFixed(4)}%` : '%0.0100'}
+              </div>
+            </div>
+
+            {/* Mark Fiyatı */}
+            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="text-[#787b86] mb-1">Mark Fiyatı</div>
+              <div className="text-sm font-semibold text-[#fff]">
+                {data?.markPrice ? Number(data.markPrice).toFixed(4) : '-'}
+              </div>
+            </div>
+
+            {/* 1. LS Account Ratio */}
+            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-[#787b86]">LS Account Ratio (Üst Hesaplar)</span>
+                <span className="font-semibold tabular-nums">
+                  <span className="text-[#089981]">%{accPct.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{accPct.short.toFixed(1)}</span>
+                </span>
+              </div>
+              <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
+                <div className="h-full bg-[#089981] transition-all duration-500" style={{ width: `${accPct.long}%` }} />
+                <div className="h-full bg-[#f23645] transition-all duration-500" style={{ width: `${accPct.short}%` }} />
+              </div>
+            </div>
+
+            {/* 2. LS Position Ratio */}
+            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-[#787b86]">LS Position Ratio (Üst Pozisyonlar)</span>
+                <span className="font-semibold tabular-nums">
+                  <span className="text-[#089981]">%{posPct.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{posPct.short.toFixed(1)}</span>
+                </span>
+              </div>
+              <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
+                <div className="h-full bg-[#089981] transition-all duration-500" style={{ width: `${posPct.long}%` }} />
+                <div className="h-full bg-[#f23645] transition-all duration-500" style={{ width: `${posPct.short}%` }} />
+              </div>
+            </div>
+
+            {/* 3. LS Global Ratio */}
+            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-[#787b86]">LS Global Ratio (Tüm Hesaplar)</span>
+                <span className="font-semibold tabular-nums">
+                  <span className="text-[#089981]">%{globPct.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{globPct.short.toFixed(1)}</span>
+                </span>
+              </div>
+              <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
+                <div className="h-full bg-[#089981] transition-all duration-500" style={{ width: `${globPct.long}%` }} />
+                <div className="h-full bg-[#f23645] transition-all duration-500" style={{ width: `${globPct.short}%` }} />
+              </div>
+            </div>
+
+            {/* Açık Pozisyon (OI) */}
+            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="text-[#787b86] mb-1">Açık Pozisyon (Open Interest)</div>
+              <div className="text-sm font-semibold text-[#ff9800] tabular-nums">
+                {oiData?.openInterest ? Number(oiData.openInterest).toLocaleString() : 'Yükleniyor...'}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
