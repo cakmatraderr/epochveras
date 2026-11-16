@@ -98,7 +98,7 @@ export const FuturesPanel = ({ symbol, onClose }) => {
             {/* Fonlama Oranı (FR) ve Mark Fiyatı */}
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-[#131722] border border-[#2a2e39] rounded p-2.5">
-                <div className="text-[#787b86] text-[11px] mb-1">Fonlama Oranı (FR)</div>
+                <div className="text-[#787b86] text-[11px] mb-1">Funding Rate</div>
                 <div className={`font-mono text-xs font-semibold tabular-nums ${data.fundingRate >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
                   {data.fundingRate !== 0 ? (data.fundingRate > 0 ? `+${data.fundingRate.toFixed(4)}%` : `${data.fundingRate.toFixed(4)}%`) : '0.0000%'}
                 </div>
