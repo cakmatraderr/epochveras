@@ -52,8 +52,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const posPct = getPct(lsPosition);
   const globPct = getPct(globalRatio);
 
-  // Fonlama oranı hesaplaması (Binance fapi/v1/premiumIndex -> lastFundingRate)
-  const rawFr = data?.lastFundingRate ? Number(data.lastFundingRate) * 100 : 0;
+  const rawFrNum = data?.lastFundingRate ? Number(data.lastFundingRate) * 100 : 0;
   const markPriceVal = data?.markPrice ? Number(data.markPrice) : null;
 
   return (
@@ -102,8 +101,8 @@ export const FuturesModal = ({ symbol, onClose }) => {
             {/* Fonlama Oranı */}
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="text-[#787b86] mb-1">Fonlama Oranı (FR)</div>
-              <div className={`text-sm font-semibold tabular-nums ${rawFr >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
-                {rawFr !== 0 ? (rawFr > 0 ? `+${rawFr.toFixed(4)}%` : `${rawFr.toFixed(4)}%`) : '0.0100%'}
+              <div className={`text-sm font-semibold tabular-nums ${rawFrNum >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                {rawFrNum > 0 ? `+${rawFrNum.toFixed(4)}%` : rawFrNum < 0 ? `${rawFrNum.toFixed(4)}%` : '0.0000%'}
               </div>
             </div>
 
@@ -115,7 +114,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
               </div>
             </div>
 
-            {/* 1. LS Account Ratio */}
+            {/* LS Account */}
             <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-[#787b86]">LS Account</span>
@@ -129,7 +128,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
               </div>
             </div>
 
-            {/* 2. LS Position Ratio */}
+            {/* LS Position */}
             <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-[#787b86]">LS Position</span>
@@ -143,7 +142,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
               </div>
             </div>
 
-            {/* 3. LS Global Ratio */}
+            {/* LS Global */}
             <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="flex justify-between items-center mb-1.5">
                 <span className="text-[#787b86]">LS Global</span>
