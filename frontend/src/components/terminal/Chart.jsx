@@ -5,6 +5,7 @@ import { MainIndicatorLegend, PaneLegend } from './IndicatorLegend';
 import { MtfTables } from './MtfTables';
 import { useChartCore, useAlertLines } from '../../hooks/useChartCore';
 import { useChartInteraction } from '../../hooks/useChartInteraction';
+import { FuturesModal } from './FuturesModal'; // <-- Futures Modal eklendi
 import { api } from '../../lib/api';
 import { fmtPrice, fmtPct, tfInfo } from '../../lib/format';
 
@@ -53,7 +54,7 @@ const SelectionBar = ({ d, onChange, onDelete }) => (
   </div>
 );
 
-export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, onDeleteAlert, clearSignal, ind, indActions }) => {
+export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, onDeleteAlert, clearSignal, ind, indActions, fdOpen, setFdOpen }) => {
   const wrap = useRef(null);
   const canvas = useRef(null);
   const R = useRef({ bars: [], drawings: [], iv: 60, prec: 2, tick: 0.01 }).current;
@@ -101,6 +102,14 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
       <MtfTables symbol={symbol} ind={ind} R={R} />
       {sel && <SelectionBar d={sel} onChange={change} onDelete={() => deleteDrawing(sel.id)} />}
       {loading && <div className="ev-loading" data-testid="chart-loading">Veriler yükleniyor…</div>}
+
+      {/* --- FUTURES DATA MODAL ENTEGRASYONU --- */}
+      {fdOpen && (
+        <FuturesModal 
+          symbol={symbol} 
+          onClose={() => setFdOpen(false)} 
+        />
+      )}
     </div>
   );
 };
