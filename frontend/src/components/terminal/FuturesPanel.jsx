@@ -69,9 +69,9 @@ export const FuturesPanel = ({ symbol, onClose }) => {
   }, [symbol, fetchData]);
 
   return (
-    <div className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39]" data-testid="futures-panel">
-      {/* Alarm paneliyle birebir aynı sınıfa sahip başlık (Üst çizgisinden sürükleme özelliğini tetikler) */}
-      <div className="ev-panel-title flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] select-none shrink-0">
+    <div className="ev-panel flex h-full flex-col" data-testid="futures-panel">
+      {/* Alarm paneliyle birebir aynı ev-panel-title yapısı */}
+      <div className="ev-panel-title">
         <span>Futures Data <span className="text-[#787b86]">({symbol})</span></span>
         <div className="flex items-center gap-1">
           <button 
@@ -120,8 +120,7 @@ export const FuturesPanel = ({ symbol, onClose }) => {
             <div className="bg-[#131722] border border-[#2a2e39] rounded p-2.5 space-y-1.5">
               <div className="text-[#787b86] text-[11px]">Açık Pozisyon (Open Interest)</div>
               <div className="font-mono text-sm font-semibold text-[#ff9800]">
-                {data.oiCoin.toLocaleString('en-US', { maximumFractionDigits: 2 })}{' '}
-                <span className="text-xs font-normal text-[#787b86]">{symbol.replace('USDT', '')}</span>
+                {data.oiCoin.toLocaleString('en-US', { maximumFractionDigits: 2 })} <span className="text-xs font-normal text-[#787b86]">{symbol.replace('USDT', '')}</span>
               </div>
               {data.oiUsdt && (
                 <div className="font-mono text-xs text-[#787b86]">
