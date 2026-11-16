@@ -62,8 +62,9 @@ body.ev-resizing, body.ev-resizing * { cursor: col-resize !important; user-selec
   display: flex; 
   flex-direction: column; 
   min-width: 0; 
+  height: 100%; 
   max-height: 100%; 
-  overflow: visible; /* Dışarı taşan dokunma alanının kesilmesini önler */
+  overflow: hidden; 
   background: #000; 
 }
 
@@ -73,7 +74,7 @@ body.ev-resizing, body.ev-resizing * { cursor: col-resize !important; user-selec
   left: -18px; 
   top: 0; 
   bottom: 0; 
-  width: 36px; /* 36 piksel genişliğinde gerçek dokunma alanı */
+  width: 36px; 
   cursor: col-resize; 
   z-index: 999; 
   touch-action: none; 
@@ -83,7 +84,6 @@ body.ev-resizing, body.ev-resizing * { cursor: col-resize !important; user-selec
   background: transparent;
 }
 
-/* Çizgi */
 .ev-vresizer::after {
   content: '';
   width: 4px;
@@ -92,7 +92,6 @@ body.ev-resizing, body.ev-resizing * { cursor: col-resize !important; user-selec
   transition: background-color 0.15s;
 }
 
-/* Ortadaki parmak tutma göstergesi (hap şeklinde tutamaç) */
 .ev-vresizer::before {
   content: '';
   position: absolute;
@@ -111,9 +110,7 @@ body.ev-resizing, body.ev-resizing * { cursor: col-resize !important; user-selec
 
 /* Yatay panel ayırıcı (Watchlist ile Alarm arası) */
 .ev-hresizer { 
-  height: 28px; 
-  margin-top: -12px;
-  margin-bottom: -12px;
+  height: 16px; 
   flex-shrink: 0; 
   cursor: row-resize; 
   z-index: 999;
@@ -133,7 +130,6 @@ body.ev-resizing, body.ev-resizing * { cursor: col-resize !important; user-selec
   transition: background-color 0.15s;
 }
 
-/* Yatay tutamaç ortasındaki tutma çentiği */
 .ev-hresizer::before {
   content: '';
   position: absolute;
