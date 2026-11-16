@@ -29,7 +29,15 @@ export const FuturesPanel = ({ symbol, onClose }) => {
         const ls = Array.isArray(lsArr) && lsArr.length > 0 ? lsArr[0] : {};
         const longAcc = parseFloat(ls.longAccount || 0.5);
         const shortAcc = parseFloat(ls.shortAccount || 0.5);
-        const lastPrice = market.tickers[symbol]?.last || 0;
+        
+        // Market verisinden fiyat, mark price ve fonlama oranını alıyoruz
+        const ticker = market.tickers[symbol] || {};
+        const lastPrice = ticker.last || ticker.close || 0;
+        const markPrice = ticker.markPrice || lastPrice;
+        
+        // Watchlist'teki gibi fonlama oranını doğru yüzde formatına çeviriyoruz
+        const fundingRate = ticker.fundingRate !== undefined ? Number(ticker.fundingRate) * 100 : 0;
+        
         const oiCoin = parseFloat(oiData.openInterest || 0);
 
         setData({
@@ -38,6 +46,8 @@ export const FuturesPanel = ({ symbol, onClose }) => {
           longPct: (longAcc * 100).toFixed(1),
           shortPct: (shortAcc * 100).toFixed(1),
           ratio: parseFloat(ls.longShortRatio || 1).toFixed(2),
+          markPrice,
+          fundingRate,
         });
       })
       .catch((err) => {
@@ -51,10 +61,10 @@ export const FuturesPanel = ({ symbol, onClose }) => {
   }, [symbol]);
 
   return (
-    <div className="ev-panel flex h-full flex-col" data-testid="futures-panel">
-      <div className="ev-panel-title">
+    <div className="ev-panel flex h-full flex-col bg-[#1e222d] text-[#d1d4dc]" data-testid="futures-panel">
+      <div className="ev-panel-title flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39]">
         <span>Futures Data <span className="text-[#787b86]">({symbol})</span></span>
-        <button type="button" className="ev-iconbtn" onClick={onClose} data-testid="futures-close-btn">
+        <button type="button" className="ev-iconbtn text-[#787b86] hover:text-[#fff]" onClick={onClose} data-testid="futures-close-btn">
           <X size={16} />
         </button>
       </div>
@@ -69,10 +79,28 @@ export const FuturesPanel = ({ symbol, onClose }) => {
         {error && <div className="text-[#f23645] py-6 text-center">{error}</div>}
 
         {!loading && !error && data && (
-          <div className="space-y-4">
-            <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-2.5 space-y-1.5">
+          <div className="space-y-3">
+            {/* Fonlama Oranı (FR) ve Mark Fiyatı */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-[#131722] border border-[#2a2e39] rounded p-2.5">
+                <div className="text-[#787b86] text-[11px] mb-1">Fonlama Oranı (FR)</div>
+                <div className={`font-mono text-xs font-semibold tabular-nums ${data.fundingRate >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                  {data.fundingRate !== 0 ? (data.fundingRate > 0 ? `+${data.fundingRate.toFixed(4)}%` : `${data.fundingRate.toFixed(4)}%`) : '0.0000%'}
+                </div>
+              </div>
+
+              <div className="bg-[#131722] border border-[#2a2e39] rounded p-2.5">
+                <div className="text-[#787b86] text-[11px] mb-1">Mark Fiyatı</div>
+                <div className="font-mono text-xs font-semibold text-[#fff] tabular-nums">
+                  {data.markPrice ? (data.markPrice < 1 ? Number(data.markPrice).toFixed(6) : Number(data.markPrice).toFixed(2)) : '-'}
+                </div>
+              </div>
+            </div>
+
+            {/* Açık Pozisyon (Open Interest) */}
+            <div className="bg-[#131722] border border-[#2a2e39] rounded p-2.5 space-y-1.5">
               <div className="text-[#787b86] text-[11px]">Açık Pozisyon (Open Interest)</div>
-              <div className="font-mono text-sm font-semibold">
+              <div className="font-mono text-sm font-semibold text-[#ff9800]">
                 {data.oiCoin.toLocaleString('en-US', { maximumFractionDigits: 2 })}{' '}
                 <span className="text-xs font-normal text-[#787b86]">{symbol.replace('USDT', '')}</span>
               </div>
@@ -83,9 +111,10 @@ export const FuturesPanel = ({ symbol, onClose }) => {
               )}
             </div>
 
-            <div className="bg-[#1e222d] border border-[#2a2e39] rounded p-2.5 space-y-2">
+            {/* Long / Short Oranı */}
+            <div className="bg-[#131722] border border-[#2a2e39] rounded p-2.5 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-[#787b86] text-[11px]">Long / Short Oranı</span>
+                <span className="text-[#787b86] text-[11px]">LS Global Oranı</span>
                 <span className="font-mono font-semibold text-[#d1d4dc]">{data.ratio}</span>
               </div>
 
