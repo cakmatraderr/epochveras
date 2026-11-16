@@ -5,7 +5,7 @@ import { MainIndicatorLegend, PaneLegend } from './IndicatorLegend';
 import { MtfTables } from './MtfTables';
 import { useChartCore, useAlertLines } from '../../hooks/useChartCore';
 import { useChartInteraction } from '../../hooks/useChartInteraction';
-import { FuturesModal } from './FuturesModal'; // <-- Futures Modal eklendi
+import { FuturesModal } from './FuturesModal';
 import { api } from '../../lib/api';
 import { fmtPrice, fmtPct, tfInfo } from '../../lib/format';
 
@@ -103,7 +103,6 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
       {sel && <SelectionBar d={sel} onChange={change} onDelete={() => deleteDrawing(sel.id)} />}
       {loading && <div className="ev-loading" data-testid="chart-loading">Veriler yükleniyor…</div>}
 
-      {/* --- FUTURES DATA MODAL ENTEGRASYONU --- */}
       {fdOpen && (
         <FuturesModal 
           symbol={symbol} 
