@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { X, RefreshCw } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtVol } from '../../lib/format';
 
@@ -8,65 +8,80 @@ export const FuturesPanel = ({ symbol, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!symbol) return;
-    let cancelled = false;
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      fetch(`/api/binance/openInterest?symbol=${symbol}`).then(async (r) => {
-        if (!r.ok) throw new Error(`OI Hatası (${r.status})`);
-        return r.json();
-      }),
-      fetch(`/api/binance/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`).then(async (r) => {
-        if (!r.ok) throw new Error(`L/S Hatası (${r.status})`);
-        return r.json();
-      })
-    ])
-      .then(([oiData, lsArr]) => {
-        if (cancelled) return;
-        const ls = Array.isArray(lsArr) && lsArr.length > 0 ? lsArr[0] : {};
-        const longAcc = parseFloat(ls.longAccount || 0.5);
-        const shortAcc = parseFloat(ls.shortAccount || 0.5);
-        
-        // Market verisinden fiyat, mark price ve fonlama oranını alıyoruz
-        const ticker = market.tickers[symbol] || {};
-        const lastPrice = ticker.last || ticker.close || 0;
-        const markPrice = ticker.markPrice || lastPrice;
-        
-        // Watchlist'teki gibi fonlama oranını doğru yüzde formatına çeviriyoruz
-        const fundingRate = ticker.fundingRate !== undefined ? Number(ticker.fundingRate) * 100 : 0;
-        
-        const oiCoin = parseFloat(oiData.openInterest || 0);
+    try {
+      const cleanSymbol = symbol.replace('.P', '');
 
-        setData({
-          oiCoin,
-          oiUsdt: lastPrice ? oiCoin * lastPrice : null,
-          longPct: (longAcc * 100).toFixed(1),
-          shortPct: (shortAcc * 100).toFixed(1),
-          ratio: parseFloat(ls.longShortRatio || 1).toFixed(2),
-          markPrice,
-          fundingRate,
-        });
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+      // OI, L/S oranları ve Binance premium index (FR ve Mark Price için) verilerini çekiyoruz
+      const [oiRes, lsArr, premiumRes] = await Promise.all([
+        fetch(`/api/binance/openInterest?symbol=${symbol}`).then(r => r.ok ? r.json() : { openInterest: 0 }),
+        fetch(`/api/binance/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`).then(r => r.ok ? r.json() : []),
+        fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.ok ? r.json() : null).catch(() => null)
+      ]);
+
+      const ls = Array.isArray(lsArr) && lsArr.length > 0 ? lsArr[0] : {};
+      const longAcc = parseFloat(ls.longAccount || 0.5);
+      const shortAcc = parseFloat(ls.shortAccount || 0.5);
+      
+      const ticker = market.tickers[symbol] || market.tickers[cleanSymbol] || {};
+      const lastPrice = ticker.last || ticker.close || (premiumRes?.markPrice ? Number(premiumRes.markPrice) : 0);
+      const markPrice = premiumRes?.markPrice ? Number(premiumRes.markPrice) : lastPrice;
+      
+      // Fonlama oranını öncelikle Binance API'den, yoksa market ticker'dan alıp yüzdeye çeviriyoruz
+      let rawFr = 0;
+      if (premiumRes?.lastFundingRate) {
+        rawFr = Number(premiumRes.lastFundingRate) * 100;
+      } else if (ticker.fundingRate !== undefined) {
+        rawFr = Number(ticker.fundingRate) * 100;
+      }
+      
+      const oiCoin = parseFloat(oiRes.openInterest || 0);
+
+      setData({
+        oiCoin,
+        oiUsdt: lastPrice ? oiCoin * lastPrice : null,
+        longPct: (longAcc * 100).toFixed(1),
+        shortPct: (shortAcc * 100).toFixed(1),
+        ratio: parseFloat(ls.longShortRatio || 1).toFixed(2),
+        markPrice,
+        fundingRate: rawFr,
       });
-
-    return () => { cancelled = true; };
+    } catch (err) {
+      setError(err.message || 'Veri çekilemedi');
+    } finally {
+      setLoading(false);
+    }
   }, [symbol]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchData().then(() => {
+      if (cancelled) return;
+    });
+    return () => { cancelled = true; };
+  }, [symbol, fetchData]);
 
   return (
     <div className="ev-panel flex h-full flex-col bg-[#1e222d] text-[#d1d4dc]" data-testid="futures-panel">
       <div className="ev-panel-title flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39]">
         <span>Futures Data <span className="text-[#787b86]">({symbol})</span></span>
-        <button type="button" className="ev-iconbtn text-[#787b86] hover:text-[#fff]" onClick={onClose} data-testid="futures-close-btn">
-          <X size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button 
+            type="button" 
+            onClick={fetchData} 
+            className="p-1 text-[#787b86] hover:text-[#fff] transition-colors rounded" 
+            title="Yenile"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button type="button" className="ev-iconbtn text-[#787b86] hover:text-[#fff] p-1" onClick={onClose} data-testid="futures-close-btn">
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-3 space-y-3 text-xs text-[#d1d4dc]">
@@ -75,10 +90,10 @@ export const FuturesPanel = ({ symbol, onClose }) => {
           <span className="text-[11px] text-[#787b86]">5dk Periyot</span>
         </div>
 
-        {loading && <div className="text-[#787b86] py-6 text-center">Veriler çekiliyor...</div>}
+        {loading && !data && <div className="text-[#787b86] py-6 text-center">Veriler çekiliyor...</div>}
         {error && <div className="text-[#f23645] py-6 text-center">{error}</div>}
 
-        {!loading && !error && data && (
+        {data && (
           <div className="space-y-3">
             {/* Fonlama Oranı (FR) ve Mark Fiyatı */}
             <div className="grid grid-cols-2 gap-2">
