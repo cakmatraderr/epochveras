@@ -11,7 +11,7 @@ import { fmtPrice, fmtPct, tfInfo } from '../../lib/format';
 
 const SWATCHES = ['#2962ff', '#f23645', '#089981', '#ff9800', '#ffffff', '#e040fb', '#00bcd4'];
 
-const Legend = ({ symbol, tf, lg, prec, children }) => {
+const Legend = ({ symbol, tf, lg, prec, countdown, children }) => {
   const col = lg && lg.chg >= 0 ? 'text-[#089981]' : 'text-[#f23645]';
   return (
     <div className="ev-legend" data-testid="chart-legend">
@@ -19,6 +19,14 @@ const Legend = ({ symbol, tf, lg, prec, children }) => {
         <span className="font-semibold" data-testid="legend-symbol">{symbol}</span>
         <span className="text-[#787b86]">·</span><span>{tfInfo(tf).l}</span>
         <span className="text-[#787b86]">·</span><span>Binance</span>
+        {countdown && (
+          <>
+            <span className="text-[#787b86]">·</span>
+            <span className="font-mono text-[12px] text-[#FFEB3B] bg-[#1e222d] px-1.5 py-0.5 rounded border border-[#2a2e39]" title="Bar Kapanış Geri Sayımı">
+              ⏱ {countdown}
+            </span>
+          </>
+        )}
       </div>
       {lg && (
         <div className="flex flex-wrap items-center gap-x-2.5 text-[12px] tabular-nums" data-testid="legend-ohlc">
@@ -62,6 +70,7 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
   const [loading, setLoading] = useState(true);
   const [selId, setSelId] = useState(null);
   const [, bump] = useState(0);
+  const [countdown, setCountdown] = useState('');
   
   R.tool = tool;
   R.magnet = magnet;
@@ -70,6 +79,41 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
   useChartCore(R, symbol, tf, setLegend, setLoading);
   useIndicators(R, ind, setOuts);
   useAlertLines(R, alerts, symbol);
+
+  // Çubuk kapanış geri sayım sayacı
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const bars = R.bars;
+      if (!bars || bars.length === 0) {
+        setCountdown('');
+        return;
+      }
+      const lastBar = bars[bars.length - 1];
+      // Timeframe süresini saniye cinsinden al (tfInfo içinde saniye bilgisi vardır veya varsayılan hesaplanır)
+      const info = tfInfo(tf);
+      const tfSeconds = info.sec || 60; // Varsayılan 1m
+      const barCloseTime = lastBar.time + tfSeconds * 1000;
+      const now = Date.now();
+      const diff = Math.floor((barCloseTime - now) / 1000);
+
+      if (diff <= 0) {
+        setCountdown('00:00');
+        return;
+      }
+
+      const hrs = Math.floor(diff / 3600);
+      const mins = Math.floor((diff % 3600) / 60);
+      const secs = diff % 60;
+
+      if (hrs > 0) {
+        setCountdown(`${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
+      } else {
+        setCountdown(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [tf, R.bars]);
 
   useEffect(() => {
     let alive = true;
@@ -95,7 +139,7 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
     <div ref={wrap} className="ev-chart-wrap" data-testid="chart-container">
       <div ref={(n) => { R.box = n; }} className="absolute inset-0" />
       <canvas ref={canvas} className="ev-overlay" data-testid="chart-overlay" />
-      <Legend symbol={symbol} tf={tf} lg={legend} prec={R.prec}>
+      <Legend symbol={symbol} tf={tf} lg={legend} prec={R.prec} countdown={countdown}>
         <MainIndicatorLegend ind={ind} outs={outs} i={legend ? legend.i : null} prec={R.prec} actions={indActions} />
       </Legend>
       <PaneLegend R={R} ind={ind} outs={outs} i={legend ? legend.i : null} actions={indActions} />
