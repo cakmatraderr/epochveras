@@ -19,8 +19,9 @@ export const FuturesModal = ({ symbol, onClose }) => {
       try {
         const cleanSymbol = symbol.replace('.P', '');
 
-        // Tüm verileri paralel olarak çekiyoruz
-        const [oiRes, accRes, posRes, globRes] = await Promise.all([
+        // Tüm verileri (Premium Index dahil) doğrudan Binance API'sinden paralel çekiyoruz
+        const [premiumRes, oiRes, accRes, posRes, globRes] = await Promise.all([
+          fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.json()),
           fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${cleanSymbol}`).then(r => r.json()),
           fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json()),
           fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json()),
@@ -33,9 +34,11 @@ export const FuturesModal = ({ symbol, onClose }) => {
         const pos = Array.isArray(posRes) && posRes.length > 0 ? posRes[0] : {};
         const glob = Array.isArray(globRes) && globRes.length > 0 ? globRes[0] : {};
 
-        const lastPrice = market.tickers[symbol]?.close || market.tickers[symbol]?.last || market.tickers[cleanSymbol]?.close || 0;
-        const coinFr = market.tickers[symbol]?.fundingRate !== undefined ? Number(market.tickers[symbol].fundingRate) * 100 : 0;
+        // Fonlama oranını doğrudan Binance premiumIndex'ten alıp yüzdeye çeviriyoruz (örn: 0.0001 -> %0.01)
+        const rawFr = premiumRes?.lastFundingRate ? Number(premiumRes.lastFundingRate) * 100 : 0;
         
+        // Mark fiyatını ve son fiyatı belirliyoruz
+        const markPrice = premiumRes?.markPrice ? Number(premiumRes.markPrice) : (market.tickers[symbol]?.close || 0);
         const oiCoin = parseFloat(oiRes.openInterest || 0);
 
         const getPct = (item, lKey, sKey) => {
@@ -48,9 +51,9 @@ export const FuturesModal = ({ symbol, onClose }) => {
 
         setData({
           oiCoin,
-          oiUsdt: lastPrice ? oiCoin * lastPrice : null,
-          markPrice: lastPrice,
-          fundingRate: coinFr,
+          oiUsdt: markPrice ? oiCoin * markPrice : null,
+          markPrice,
+          fundingRate: rawFr,
           acc: getPct(acc, 'longAccount', 'shortAccount'),
           pos: getPct(pos, 'longPosition', 'shortPosition'),
           glob: getPct(glob, 'longAccount', 'shortAccount'),
@@ -66,16 +69,6 @@ export const FuturesModal = ({ symbol, onClose }) => {
 
     return () => { cancelled = true; };
   }, [symbol]);
-
-  // Manuel yenileme butonu için sarmalayıcı
-  const handleRefresh = () => {
-    if (!symbol) return;
-    setLoading(true);
-    // Tekrar tetiklemek için sembolü değiştirip eski haline getirebiliriz ya da fonksiyonu tetikleyebiliriz
-    // useEffect zaten symbol değiştiğinde çalışıyor, pratik olması açısından sayfayı güncelleyebiliriz:
-    const event = new Event('popstate');
-    window.dispatchEvent(event);
-  };
 
   return (
     <div className="ev-panel flex h-full flex-col bg-[#1e222d] text-[#d1d4dc]" data-testid="futures-modal">
@@ -100,11 +93,11 @@ export const FuturesModal = ({ symbol, onClose }) => {
 
         {data && (
           <div className="grid grid-cols-2 gap-3">
-            {/* Fonlama Oranı (FR) */}
+            {/* Fonlama Oranı (FR) - Doğrudan Binance API'den */}
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="text-[#787b86] mb-1">Fonlama Oranı (FR)</div>
               <div className={`text-sm font-semibold tabular-nums ${data.fundingRate >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
-                {data.fundingRate > 0 ? `+${data.fundingRate.toFixed(4)}%` : `${data.fundingRate.toFixed(4)}%`}
+                {data.fundingRate !== 0 ? (data.fundingRate > 0 ? `+${data.fundingRate.toFixed(4)}%` : `${data.fundingRate.toFixed(4)}%`) : '0.0000%'}
               </div>
             </div>
 
