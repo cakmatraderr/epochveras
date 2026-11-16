@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { X, RefreshCw } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtVol } from '../../lib/format';
@@ -7,6 +7,34 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  
+  // Panel yüksekliğini sürükleyerek değiştirmek için state ve ref
+  const [panelHeight, setPanelHeight] = useState(320);
+  const isResizing = useRef(false);
+  const startY = useRef(0);
+  const startHeight = useRef(0);
+
+  const handleMouseDown = (e) => {
+    isResizing.current = true;
+    startY.current = e.clientY;
+    startHeight.current = panelHeight;
+
+    const handleMouseMove = (moveEvent) => {
+      if (!isResizing.current) return;
+      const delta = moveEvent.clientY - startY.current;
+      const newHeight = Math.max(150, Math.min(800, startHeight.current + delta));
+      setPanelHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      isResizing.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
 
   const fetchFutures = useCallback(async () => {
     if (!symbol) return;
@@ -74,17 +102,21 @@ export const FuturesModal = ({ symbol, onClose }) => {
 
   return (
     <div 
-      className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39] overflow-hidden resize-y min-h-[200px]" 
+      className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39] overflow-hidden relative select-none" 
       data-testid="futures-modal"
-      style={{ resize: 'vertical' }}
+      style={{ height: `${panelHeight}px` }}
     >
-      {/* Başlık ve Kontrol Tuşları */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] select-none shrink-0">
+      {/* Üst Başlık (Buradan tutarak da dikey olarak sürükleyebilirsin) */}
+      <div 
+        className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] shrink-0 cursor-ns-resize"
+        onMouseDown={handleMouseDown}
+        title="Yüksekliği ayarlamak için basıp sürükleyin"
+      >
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm text-[#2962ff]">{symbol}</span>
           <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <button 
             type="button" 
             onClick={fetchFutures} 
@@ -99,7 +131,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
         </div>
       </div>
 
-      {/* İçerik Kutusu (Yüksekliğe göre kaydırılabilir alan) */}
+      {/* İçerik Alanı */}
       <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3 text-xs">
         {loading && !data && <div className="text-[#787b86] py-8 text-center">Veriler yükleniyor...</div>}
         {error && <div className="text-[#f23645] py-8 text-center">{error}</div>}
@@ -179,6 +211,13 @@ export const FuturesModal = ({ symbol, onClose }) => {
           </div>
         )}
       </div>
+
+      {/* Alt Kenar Çubuğu (Buradan da tutup aşağı yukarı çekiştirebilirsin) */}
+      <div 
+        className="h-1.5 bg-[#2a2e39] hover:bg-[#2962ff] cursor-ns-resize shrink-0 transition-colors"
+        onMouseDown={handleMouseDown}
+        title="Boyutlandırmak için sürükleyin"
+      />
     </div>
   );
 };
