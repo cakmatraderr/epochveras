@@ -7,34 +7,6 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
-  // Panel yüksekliği için state
-  const [panelHeight, setPanelHeight] = useState(320);
-
-  // Üst başlığın tamamından tutup sürükleyerek dikey boyutlandırma
-  const handlePointerDown = (e) => {
-    // Kapat veya yenile butonlarına tıklandığında sürüklemeyi tetikleme
-    if (e.target.closest('button')) return;
-
-    e.target.setPointerCapture(e.pointerId);
-    const startY = e.clientY;
-    const startHeight = panelHeight;
-
-    const onPointerMove = (moveEvent) => {
-      const delta = moveEvent.clientY - startY;
-      const newHeight = Math.max(160, Math.min(800, startHeight + delta));
-      setPanelHeight(newHeight);
-    };
-
-    const onPointerUp = (upEvent) => {
-      upEvent.target.releasePointerCapture(upEvent.pointerId);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-  };
 
   const fetchFutures = useCallback(async () => {
     if (!symbol) return;
@@ -101,18 +73,10 @@ export const FuturesModal = ({ symbol, onClose }) => {
   }, [symbol, fetchFutures]);
 
   return (
-    <div 
-      className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39] overflow-hidden select-none" 
-      data-testid="futures-modal"
-      style={{ height: `${panelHeight}px` }}
-    >
-      {/* Üst Başlık (Tamamından tutup aşağı yukarı çekiştirebilirsin) */}
-      <div 
-        className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] shrink-0 cursor-ns-resize touch-none"
-        onPointerDown={handlePointerDown}
-        title="Boyutlandırmak için basıp sürükleyin"
-      >
-        <div className="flex items-center gap-2 pointer-events-none">
+    <div className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39]" data-testid="futures-modal">
+      {/* Alarm paneliyle birebir aynı sınıfları kullanan başlık çubuğu */}
+      <div className="ev-panel-title flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] select-none shrink-0">
+        <div className="flex items-center gap-2">
           <span className="font-semibold text-sm text-[#2962ff]">{symbol}</span>
           <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
         </div>
