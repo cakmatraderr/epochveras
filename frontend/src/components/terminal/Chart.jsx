@@ -11,7 +11,7 @@ import { fmtPrice, fmtPct, tfInfo } from '../../lib/format';
 
 const SWATCHES = ['#2962ff', '#f23645', '#089981', '#ff9800', '#ffffff', '#e040fb', '#00bcd4'];
 
-const Legend = ({ symbol, tf, lg, prec, countdown, children }) => {
+const Legend = ({ symbol, tf, lg, prec, children }) => {
   const col = lg && lg.chg >= 0 ? 'text-[#089981]' : 'text-[#f23645]';
   return (
     <div className="ev-legend" data-testid="chart-legend">
@@ -19,14 +19,6 @@ const Legend = ({ symbol, tf, lg, prec, countdown, children }) => {
         <span className="font-semibold" data-testid="legend-symbol">{symbol}</span>
         <span className="text-[#787b86]">·</span><span>{tfInfo(tf).l}</span>
         <span className="text-[#787b86]">·</span><span>Binance</span>
-        {countdown && (
-          <>
-            <span className="text-[#787b86]">·</span>
-            <span className="font-mono text-[12px] text-[#FFEB3B] bg-[#1e222d] px-1.5 py-0.5 rounded border border-[#2a2e39]" title="Bar Kapanış Geri Sayımı">
-              ⏱ {countdown}
-            </span>
-          </>
-        )}
       </div>
       {lg && (
         <div className="flex flex-wrap items-center gap-x-2.5 text-[12px] tabular-nums" data-testid="legend-ohlc">
@@ -89,9 +81,8 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
         return;
       }
       const lastBar = bars[bars.length - 1];
-      // Timeframe süresini saniye cinsinden al (tfInfo içinde saniye bilgisi vardır veya varsayılan hesaplanır)
       const info = tfInfo(tf);
-      const tfSeconds = info.sec || 60; // Varsayılan 1m
+      const tfSeconds = info.sec || 60;
       const barCloseTime = lastBar.time + tfSeconds * 1000;
       const now = Date.now();
       const diff = Math.floor((barCloseTime - now) / 1000);
@@ -139,10 +130,18 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
     <div ref={wrap} className="ev-chart-wrap" data-testid="chart-container">
       <div ref={(n) => { R.box = n; }} className="absolute inset-0" />
       <canvas ref={canvas} className="ev-overlay" data-testid="chart-overlay" />
-      <Legend symbol={symbol} tf={tf} lg={legend} prec={R.prec} countdown={countdown}>
+      <Legend symbol={symbol} tf={tf} lg={legend} prec={R.prec}>
         <MainIndicatorLegend ind={ind} outs={outs} i={legend ? legend.i : null} prec={R.prec} actions={indActions} />
       </Legend>
       <PaneLegend R={R} ind={ind} outs={outs} i={legend ? legend.i : null} actions={indActions} />
+      
+      {/* Sağ Fiyat Ölçeğinin Orasında/Altında Anlık Fiyatın Altına Kalan Süre Sayacı */}
+      {countdown && (
+        <div className="absolute right-2 top-14 z-40 pointer-events-none bg-[#1e222d] border border-[#2a2e39] text-[#FFEB3B] font-mono text-[11px] px-1.5 py-0.5 rounded shadow-md flex items-center gap-1">
+          <span>⏱ {countdown}</span>
+        </div>
+      )}
+
       <MtfTables symbol={symbol} ind={ind} R={R} />
       {sel && <SelectionBar d={sel} onChange={change} onDelete={() => deleteDrawing(sel.id)} />}
       {loading && <div className="ev-loading" data-testid="chart-loading">Veriler yükleniyor…</div>}
