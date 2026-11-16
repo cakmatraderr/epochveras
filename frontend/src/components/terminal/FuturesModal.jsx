@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { X, RefreshCw } from 'lucide-react';
+import { X, RefreshCw, GripVertical } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtVol } from '../../lib/format';
 
@@ -11,7 +11,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
   // Panel yüksekliği için state
   const [panelHeight, setPanelHeight] = useState(320);
 
-  // Pointer event ile dikey boyutlandırma (Kesin ve hatasız sürükleme)
+  // Üst başlıktaki tutamaktan basıp sürükleyerek dikey boyutlandırma
   const handlePointerDown = (e) => {
     e.target.setPointerCapture(e.pointerId);
     const startY = e.clientY;
@@ -99,17 +99,26 @@ export const FuturesModal = ({ symbol, onClose }) => {
 
   return (
     <div 
-      className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39] relative overflow-hidden select-none" 
+      className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39] overflow-hidden select-none" 
       data-testid="futures-modal"
       style={{ height: `${panelHeight}px` }}
     >
-      {/* Üst Başlık */}
+      {/* Üst Başlık ve Boyutlandırma Tutamacı */}
       <div className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] shrink-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm text-[#2962ff]">{symbol}</span>
           <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          {/* Boyutlandırma Sürükleme İkonu (Üst Başlıkta) */}
+          <div 
+            className="p-1 text-[#787b86] hover:text-[#fff] cursor-ns-resize transition-colors touch-none flex items-center"
+            onPointerDown={handlePointerDown}
+            title="Yüksekliği ayarlamak için basıp sürükleyin"
+          >
+            <GripVertical size={14} />
+          </div>
+
           <button 
             type="button" 
             onClick={fetchFutures} 
@@ -118,6 +127,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
+          
           <button type="button" className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" onClick={onClose} data-testid="futures-close-btn" title="Kapat">
             <X size={16} />
           </button>
@@ -203,15 +213,6 @@ export const FuturesModal = ({ symbol, onClose }) => {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Alt Boyutlandırma Tutamacı (Buraya basıp tutup yukarı aşağı çekiştirebilirsin) */}
-      <div 
-        className="h-3 bg-[#131722] hover:bg-[#2962ff] cursor-ns-resize shrink-0 flex items-center justify-center transition-colors touch-none"
-        onPointerDown={handlePointerDown}
-        title="Boyutlandırmak için basıp sürükleyin"
-      >
-        <div className="w-10 h-1 bg-[#2a2e39] rounded-full pointer-events-none" />
       </div>
     </div>
   );
