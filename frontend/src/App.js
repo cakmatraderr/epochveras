@@ -17,6 +17,7 @@ import { IndicatorSettings } from './components/terminal/IndicatorSettings';
 import { useIndicatorSettings } from './hooks/useIndicatorSettings';
 import { SymbolSearch } from './components/terminal/SymbolSearch';
 import { AlertDialog } from './components/terminal/AlertDialog';
+import { FuturesModal } from './components/terminal/FuturesModal'; // <-- Futures Modal eklendi
 
 const SidePanels = ({ L, set, alertsApi, pickSymbol }) => {
   const dragW = useDrag((dx) => set((l) => ({ sideW: Math.min(1100, Math.max(260, l.sideW - dx)) })));
@@ -47,6 +48,7 @@ function Terminal({ L, set, indApi }) {
   const [tool, setTool] = useState('cursor');
   const [indOpen, setIndOpen] = useState(false);
   const [settingsId, setSettingsId] = useState(null);
+  const [fdOpen, setFdOpen] = useState(false); // <-- Futures Data Modal State'i eklendi
   const { ind, toggle, setValues, reset } = indApi;
   const startPick = () => { setIndOpen(false); setSettingsId(null); setTool('rdgpick'); };
   const indActions = {
@@ -74,11 +76,15 @@ function Terminal({ L, set, indApi }) {
         <LeftToolbar tool={tool} setTool={setTool} magnet={L.magnet} setMagnet={(magnet) => set({ magnet })} onClear={clear} />
         <div className="ev-chart-area">
           <Chart symbol={L.symbol} tf={L.tf} tool={tool} setTool={setTool} magnet={L.magnet} alerts={alertsApi.alerts}
-            onAddAlert={addAlert} onDeleteAlert={alertsApi.remove} clearSignal={clearSignal} ind={ind} indActions={indActions} />
+            onAddAlert={addAlert} onDeleteAlert={alertsApi.remove} clearSignal={clearSignal} ind={ind} indActions={indActions}
+            fdOpen={fdOpen} setFdOpen={setFdOpen} />
         </div>
         <SidePanels L={L} set={set} alertsApi={alertsApi} pickSymbol={pickSymbol} />
-        <RightStrip wlOpen={L.wlOpen} alOpen={L.alOpen} toggleWl={() => set((l) => ({ wlOpen: !l.wlOpen }))}
-          toggleAl={() => set((l) => ({ alOpen: !l.alOpen }))} activeCount={activeCount} />
+        <RightStrip wlOpen={L.wlOpen} alOpen={L.alOpen} fdOpen={fdOpen}
+          toggleWl={() => set((l) => ({ wlOpen: !l.wlOpen }))}
+          toggleAl={() => set((l) => ({ alOpen: !l.alOpen }))}
+          toggleFd={() => setFdOpen(!fdOpen)}
+          activeCount={activeCount} />
       </div>
       <IndicatorsDialog open={indOpen} onOpenChange={setIndOpen} ind={ind} onToggle={indActions.toggle} onSettings={(id) => { setIndOpen(false); setSettingsId(id); }} />
       {settingsId && (
@@ -86,6 +92,7 @@ function Terminal({ L, set, indApi }) {
       )}
       <SymbolSearch open={symOpen} onOpenChange={setSymOpen} onPick={pickSymbol} />
       <AlertDialog open={alOpenDlg} onOpenChange={setAlOpenDlg} symbol={L.symbol} onCreate={addAlert} />
+      {fdOpen && <FuturesModal symbol={L.symbol} onClose={() => setFdOpen(false)} />}
     </div>
   );
 }
