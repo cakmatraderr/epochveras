@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { X, RefreshCw } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtVol } from '../../lib/format';
@@ -8,33 +8,29 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
-  // Panel yüksekliğini tutmak için state ve ref'ler
+  // Panel yüksekliği için state
   const [panelHeight, setPanelHeight] = useState(320);
-  const isDragging = useRef(false);
-  const startY = useRef(0);
-  const startHeight = useRef(0);
 
-  // Sürükleme (Resize) Başlangıcı
-  const handleMouseDown = (e) => {
-    isDragging.current = true;
-    startY.current = e.clientY;
-    startHeight.current = panelHeight;
+  // Pointer event ile dikey boyutlandırma (Kesin ve hatasız sürükleme)
+  const handlePointerDown = (e) => {
+    e.target.setPointerCapture(e.pointerId);
+    const startY = e.clientY;
+    const startHeight = panelHeight;
 
-    const onMouseMove = (moveEvent) => {
-      if (!isDragging.current) return;
-      const delta = moveEvent.clientY - startY.current;
-      const newHeight = Math.max(160, Math.min(700, startHeight.current + delta));
+    const onPointerMove = (moveEvent) => {
+      const delta = moveEvent.clientY - startY;
+      const newHeight = Math.max(160, Math.min(800, startHeight + delta));
       setPanelHeight(newHeight);
     };
 
-    const onMouseUp = () => {
-      isDragging.current = false;
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
+    const onPointerUp = (upEvent) => {
+      upEvent.target.releasePointerCapture(upEvent.pointerId);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
     };
 
-    window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
   };
 
   const fetchFutures = useCallback(async () => {
@@ -209,13 +205,13 @@ export const FuturesModal = ({ symbol, onClose }) => {
         )}
       </div>
 
-      {/* Alt Boyutlandırma Tutamacı (Buradan tutup yukarı aşağı rahatça çekiştirebilirsin) */}
+      {/* Alt Boyutlandırma Tutamacı (Buraya basıp tutup yukarı aşağı çekiştirebilirsin) */}
       <div 
-        className="h-2 bg-[#131722] hover:bg-[#2962ff] cursor-ns-resize shrink-0 flex items-center justify-center transition-colors"
-        onMouseDown={handleMouseDown}
+        className="h-3 bg-[#131722] hover:bg-[#2962ff] cursor-ns-resize shrink-0 flex items-center justify-center transition-colors touch-none"
+        onPointerDown={handlePointerDown}
         title="Boyutlandırmak için basıp sürükleyin"
       >
-        <div className="w-8 h-1 bg-[#2a2e39] rounded-full" />
+        <div className="w-10 h-1 bg-[#2a2e39] rounded-full pointer-events-none" />
       </div>
     </div>
   );
