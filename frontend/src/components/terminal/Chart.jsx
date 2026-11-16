@@ -57,54 +57,20 @@ const SelectionBar = ({ d, onChange, onDelete }) => (
 export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, onDeleteAlert, clearSignal, ind, indActions, fdOpen, setFdOpen }) => {
   const wrap = useRef(null);
   const canvas = useRef(null);
-  const R = useRef({ bars: [], drawings: [], iv: 60, prec: 2, tick: 0.01 }).current;
+  const R = useRef({ bars: [], drawings: [], iv: 60, prec: 2, tick: 0.01, tf }).current;
   const [legend, setLegend] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selId, setSelId] = useState(null);
   const [, bump] = useState(0);
-  const [countdown, setCountdown] = useState('');
   
   R.tool = tool;
   R.magnet = magnet;
+  R.tf = tf;
 
   const [outs, setOuts] = useState({});
   useChartCore(R, symbol, tf, setLegend, setLoading);
   useIndicators(R, ind, setOuts);
   useAlertLines(R, alerts, symbol);
-
-  // Çubuk kapanış geri sayım sayacı
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const bars = R.bars;
-      if (!bars || bars.length === 0) {
-        setCountdown('');
-        return;
-      }
-      const lastBar = bars[bars.length - 1];
-      const info = tfInfo(tf);
-      const tfSeconds = info.sec || 60;
-      const barCloseTime = lastBar.time + tfSeconds * 1000;
-      const now = Date.now();
-      const diff = Math.floor((barCloseTime - now) / 1000);
-
-      if (diff <= 0) {
-        setCountdown('00:00');
-        return;
-      }
-
-      const hrs = Math.floor(diff / 3600);
-      const mins = Math.floor((diff % 3600) / 60);
-      const secs = diff % 60;
-
-      if (hrs > 0) {
-        setCountdown(`${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
-      } else {
-        setCountdown(`${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`);
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [tf, R.bars]);
 
   useEffect(() => {
     let alive = true;
@@ -134,14 +100,6 @@ export const Chart = ({ symbol, tf, tool, setTool, magnet, alerts, onAddAlert, o
         <MainIndicatorLegend ind={ind} outs={outs} i={legend ? legend.i : null} prec={R.prec} actions={indActions} />
       </Legend>
       <PaneLegend R={R} ind={ind} outs={outs} i={legend ? legend.i : null} actions={indActions} />
-      
-      {/* Sağ Fiyat Ölçeğinin Orasında/Altında Anlık Fiyatın Altına Kalan Süre Sayacı */}
-      {countdown && (
-        <div className="absolute right-2 top-14 z-40 pointer-events-none bg-[#1e222d] border border-[#2a2e39] text-[#FFEB3B] font-mono text-[11px] px-1.5 py-0.5 rounded shadow-md flex items-center gap-1">
-          <span>⏱ {countdown}</span>
-        </div>
-      )}
-
       <MtfTables symbol={symbol} ind={ind} R={R} />
       {sel && <SelectionBar d={sel} onChange={change} onDelete={() => deleteDrawing(sel.id)} />}
       {loading && <div className="ev-loading" data-testid="chart-loading">Veriler yükleniyor…</div>}
