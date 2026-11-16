@@ -118,7 +118,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
             {/* 1. LS Account Ratio */}
             <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[#787b86]">LS Account Ratio (Üst Hesaplar)</span>
+                <span className="text-[#787b86]">LS Account</span>
                 <span className="font-semibold tabular-nums">
                   <span className="text-[#089981]">%{accPct.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{accPct.short.toFixed(1)}</span>
                 </span>
@@ -132,7 +132,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
             {/* 2. LS Position Ratio */}
             <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[#787b86]">LS Position Ratio (Üst Pozisyonlar)</span>
+                <span className="text-[#787b86]">LS Position</span>
                 <span className="font-semibold tabular-nums">
                   <span className="text-[#089981]">%{posPct.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{posPct.short.toFixed(1)}</span>
                 </span>
@@ -146,7 +146,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
             {/* 3. LS Global Ratio */}
             <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="flex justify-between items-center mb-1.5">
-                <span className="text-[#787b86]">LS Global Ratio (Tüm Hesaplar)</span>
+                <span className="text-[#787b86]">LS Global</span>
                 <span className="font-semibold tabular-nums">
                   <span className="text-[#089981]">%{globPct.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{globPct.short.toFixed(1)}</span>
                 </span>
