@@ -16,19 +16,10 @@ export const FuturesModal = ({ symbol, onClose }) => {
       try {
         const cleanSymbol = symbol.replace('.P', '');
         
-        // 1. Premium Index (Funding Rate & Mark Price)
         const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.json());
-        
-        // 2. LS Account Ratio
         const accRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
-
-        // 3. LS Position Ratio
         const posRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
-
-        // 4. Global Long/Short Ratio
         const globRes = await fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
-
-        // 5. Open Interest
         const oiRes = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${cleanSymbol}`).then(r => r.json());
 
         if (alive) {
@@ -61,7 +52,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const posPct = getPct(lsPosition);
   const globPct = getPct(globalRatio);
 
-  // Fonlama oranını doğru yüzdeye çevir (Binance 0.0001 -> %0.01)
+  // Fonlama oranı hesaplaması (Binance fapi/v1/premiumIndex -> lastFundingRate)
   const rawFr = data?.lastFundingRate ? Number(data.lastFundingRate) * 100 : 0;
   const markPriceVal = data?.markPrice ? Number(data.markPrice) : null;
 
@@ -112,7 +103,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="text-[#787b86] mb-1">Fonlama Oranı (FR)</div>
               <div className={`text-sm font-semibold tabular-nums ${rawFr >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
-                {rawFr >= 0 ? `+${rawFr.toFixed(4)}%` : `${rawFr.toFixed(4)}%`}
+                {rawFr !== 0 ? (rawFr > 0 ? `+${rawFr.toFixed(4)}%` : `${rawFr.toFixed(4)}%`) : '0.0100%'}
               </div>
             </div>
 
