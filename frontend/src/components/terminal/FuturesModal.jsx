@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { X, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { X, RefreshCw, Maximize2, Minimize2 } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtVol } from '../../lib/format';
 
@@ -7,34 +7,7 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
-  // Panel yüksekliğini sürükleyerek değiştirmek için state ve ref
-  const [panelHeight, setPanelHeight] = useState(320);
-  const isResizing = useRef(false);
-  const startY = useRef(0);
-  const startHeight = useRef(0);
-
-  const handleMouseDown = (e) => {
-    isResizing.current = true;
-    startY.current = e.clientY;
-    startHeight.current = panelHeight;
-
-    const handleMouseMove = (moveEvent) => {
-      if (!isResizing.current) return;
-      const delta = moveEvent.clientY - startY.current;
-      const newHeight = Math.max(150, Math.min(800, startHeight.current + delta));
-      setPanelHeight(newHeight);
-    };
-
-    const handleMouseUp = () => {
-      isResizing.current = false;
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-
-    window.addEventListener('mousemove', handleMouseMove);
-    window.addEventListener('mouseup', handleMouseUp);
-  };
+  const [isMinimized, setIsMinimized] = useState(false); // Kompakt / Tam görünüm geçişi
 
   const fetchFutures = useCallback(async () => {
     if (!symbol) return;
@@ -101,22 +74,15 @@ export const FuturesModal = ({ symbol, onClose }) => {
   }, [symbol, fetchFutures]);
 
   return (
-    <div 
-      className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39] overflow-hidden relative select-none" 
-      data-testid="futures-modal"
-      style={{ height: `${panelHeight}px` }}
-    >
-      {/* Üst Başlık (Buradan tutarak da dikey olarak sürükleyebilirsin) */}
-      <div 
-        className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] shrink-0 cursor-ns-resize"
-        onMouseDown={handleMouseDown}
-        title="Yüksekliği ayarlamak için basıp sürükleyin"
-      >
+    <div className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39]" data-testid="futures-modal">
+      {/* Üst Başlık ve Kontroller */}
+      <div className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] select-none shrink-0">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-sm text-[#2962ff]">{symbol}</span>
           <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
         </div>
-        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5">
+          {/* Verileri Yenile */}
           <button 
             type="button" 
             onClick={fetchFutures} 
@@ -125,99 +91,106 @@ export const FuturesModal = ({ symbol, onClose }) => {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
-          <button type="button" className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" onClick={onClose} data-testid="futures-close-btn" title="Kapat">
+          
+          {/* Daralt / Genişlet Butonu */}
+          <button 
+            type="button" 
+            onClick={() => setIsMinimized(!isMinimized)} 
+            className="p-1 text-[#787b86] hover:text-[#fff] transition-colors rounded"
+            title={isMinimized ? "Genişlet" : "Daralt"}
+          >
+            {isMinimized ? <Maximize2 size={14} /> : <Minimize2 size={14} />}
+          </button>
+
+          {/* Kapat */}
+          <button type="button" className="p-1 text-[#787b86] hover:text-[#fff] transition-colors rounded" onClick={onClose} data-testid="futures-close-btn" title="Kapat">
             <X size={16} />
           </button>
         </div>
       </div>
 
-      {/* İçerik Alanı */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3 text-xs">
-        {loading && !data && <div className="text-[#787b86] py-8 text-center">Veriler yükleniyor...</div>}
-        {error && <div className="text-[#f23645] py-8 text-center">{error}</div>}
+      {/* İçerik Alanı (Daraltıldığında gizlenir) */}
+      {!isMinimized && (
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3 text-xs">
+          {loading && !data && <div className="text-[#787b86] py-8 text-center">Veriler yükleniyor...</div>}
+          {error && <div className="text-[#f23645] py-8 text-center">{error}</div>}
 
-        {data && (
-          <div className="grid grid-cols-2 gap-3">
-            {/* Fonlama Oranı (FR) */}
-            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
-              <div className="text-[#787b86] mb-1">Fonlama Oranı (FR)</div>
-              <div className={`text-sm font-semibold tabular-nums ${data.fundingRate >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
-                {data.fundingRate !== 0 ? (data.fundingRate > 0 ? `+${data.fundingRate.toFixed(4)}%` : `${data.fundingRate.toFixed(4)}%`) : '0.0000%'}
-              </div>
-            </div>
-
-            {/* Mark Fiyatı */}
-            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
-              <div className="text-[#787b86] mb-1">Mark Fiyatı</div>
-              <div className="text-sm font-semibold text-[#fff] tabular-nums">
-                {data.markPrice ? (data.markPrice < 1 ? Number(data.markPrice).toFixed(6) : Number(data.markPrice).toFixed(2)) : '-'}
-              </div>
-            </div>
-
-            {/* LS Account */}
-            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39] space-y-1.5">
-              <div className="flex justify-between items-center">
-                <span className="text-[#787b86]">LS Account</span>
-                <span className="font-semibold tabular-nums">
-                  <span className="text-[#089981]">%{data.acc.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{data.acc.short.toFixed(1)}</span>
-                </span>
-              </div>
-              <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
-                <div style={{ width: `${data.acc.long}%` }} className="bg-[#089981] h-full transition-all duration-300" />
-                <div style={{ width: `${data.acc.short}%` }} className="bg-[#f23645] h-full transition-all duration-300" />
-              </div>
-            </div>
-
-            {/* LS Position */}
-            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39] space-y-1.5">
-              <div className="flex justify-between items-center">
-                <span className="text-[#787b86]">LS Position</span>
-                <span className="font-semibold tabular-nums">
-                  <span className="text-[#089981]">%{data.pos.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{data.pos.short.toFixed(1)}</span>
-                </span>
-              </div>
-              <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
-                <div style={{ width: `${data.pos.long}%` }} className="bg-[#089981] h-full transition-all duration-300" />
-                <div style={{ width: `${data.pos.short}%` }} className="bg-[#f23645] h-full transition-all duration-300" />
-              </div>
-            </div>
-
-            {/* LS Global */}
-            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39] space-y-1.5">
-              <div className="flex justify-between items-center">
-                <span className="text-[#787b86]">LS Global</span>
-                <span className="font-semibold tabular-nums">
-                  <span className="text-[#089981]">%{data.glob.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{data.glob.short.toFixed(1)}</span>
-                </span>
-              </div>
-              <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
-                <div style={{ width: `${data.glob.long}%` }} className="bg-[#089981] h-full transition-all duration-300" />
-                <div style={{ width: `${data.glob.short}%` }} className="bg-[#f23645] h-full transition-all duration-300" />
-              </div>
-            </div>
-
-            {/* Açık Pozisyon (OI) */}
-            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39] space-y-1">
-              <div className="text-[#787b86]">Açık Pozisyon (Open Interest)</div>
-              <div className="font-mono text-sm font-semibold text-[#ff9800]">
-                {data.oiCoin.toLocaleString('en-US', { maximumFractionDigits: 2 })} <span className="text-xs font-normal text-[#787b86]">{symbol.replace('USDT', '')}</span>
-              </div>
-              {data.oiUsdt && (
-                <div className="font-mono text-xs text-[#787b86]">
-                  ≈ ${fmtVol(data.oiUsdt)}
+          {data && (
+            <div className="grid grid-cols-2 gap-3">
+              {/* Fonlama Oranı (FR) */}
+              <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+                <div className="text-[#787b86] mb-1">Fonlama Oranı (FR)</div>
+                <div className={`text-sm font-semibold tabular-nums ${data.fundingRate >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                  {data.fundingRate !== 0 ? (data.fundingRate > 0 ? `+${data.fundingRate.toFixed(4)}%` : `${data.fundingRate.toFixed(4)}%`) : '0.0000%'}
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+              </div>
 
-      {/* Alt Kenar Çubuğu (Buradan da tutup aşağı yukarı çekiştirebilirsin) */}
-      <div 
-        className="h-1.5 bg-[#2a2e39] hover:bg-[#2962ff] cursor-ns-resize shrink-0 transition-colors"
-        onMouseDown={handleMouseDown}
-        title="Boyutlandırmak için sürükleyin"
-      />
+              {/* Mark Fiyatı */}
+              <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+                <div className="text-[#787b86] mb-1">Mark Fiyatı</div>
+                <div className="text-sm font-semibold text-[#fff] tabular-nums">
+                  {data.markPrice ? (data.markPrice < 1 ? Number(data.markPrice).toFixed(6) : Number(data.markPrice).toFixed(2)) : '-'}
+                </div>
+              </div>
+
+              {/* LS Account */}
+              <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39] space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-[#787b86]">LS Account</span>
+                  <span className="font-semibold tabular-nums">
+                    <span className="text-[#089981]">%{data.acc.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{data.acc.short.toFixed(1)}</span>
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
+                  <div style={{ width: `${data.acc.long}%` }} className="bg-[#089981] h-full transition-all duration-300" />
+                  <div style={{ width: `${data.acc.short}%` }} className="bg-[#f23645] h-full transition-all duration-300" />
+                </div>
+              </div>
+
+              {/* LS Position */}
+              <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39] space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-[#787b86]">LS Position</span>
+                  <span className="font-semibold tabular-nums">
+                    <span className="text-[#089981]">%{data.pos.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{data.pos.short.toFixed(1)}</span>
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
+                  <div style={{ width: `${data.pos.long}%` }} className="bg-[#089981] h-full transition-all duration-300" />
+                  <div style={{ width: `${data.pos.short}%` }} className="bg-[#f23645] h-full transition-all duration-300" />
+                </div>
+              </div>
+
+              {/* LS Global */}
+              <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39] space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-[#787b86]">LS Global</span>
+                  <span className="font-semibold tabular-nums">
+                    <span className="text-[#089981]">%{data.glob.long.toFixed(1)}</span> / <span className="text-[#f23645]">%{data.glob.short.toFixed(1)}</span>
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-[#2a2e39] rounded-full overflow-hidden flex">
+                  <div style={{ width: `${data.glob.long}%` }} className="bg-[#089981] h-full transition-all duration-300" />
+                  <div style={{ width: `${data.glob.short}%` }} className="bg-[#f23645] h-full transition-all duration-300" />
+                </div>
+              </div>
+
+              {/* Açık Pozisyon (OI) */}
+              <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39] space-y-1">
+                <div className="text-[#787b86]">Açık Pozisyon (Open Interest)</div>
+                <div className="font-mono text-sm font-semibold text-[#ff9800]">
+                  {data.oiCoin.toLocaleString('en-US', { maximumFractionDigits: 2 })} <span className="text-xs font-normal text-[#787b86]">{symbol.replace('USDT', '')}</span>
+                </div>
+                {data.oiUsdt && (
+                  <div className="font-mono text-xs text-[#787b86]">
+                    ≈ ${fmtVol(data.oiUsdt)}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
