@@ -1,13 +1,36 @@
-import { ListOrdered, AlarmClock } from 'lucide-react';
+import { ListOrdered, AlarmClock, Activity } from 'lucide-react';
 
-export const RightStrip = ({ wlOpen, alOpen, toggleWl, toggleAl, activeCount }) => (
+export const RightStrip = ({ wlOpen, alOpen, fdOpen, toggleWl, toggleAl, toggleFd, activeCount }) => (
   <aside className="ev-rightstrip" data-testid="right-icon-strip">
-    <button type="button" title="İzleme listesi" data-testid="strip-watchlist-btn" onClick={toggleWl} className={`ev-toolbtn ${wlOpen ? 'on' : ''}`}>
+    <button 
+      type="button" 
+      title="İzleme listesi" 
+      data-testid="strip-watchlist-btn" 
+      onClick={toggleWl} 
+      className={`ev-toolbtn ${wlOpen ? 'on' : ''}`}
+    >
       <ListOrdered size={20} strokeWidth={1.5} />
     </button>
-    <button type="button" title="Alarmlar" data-testid="strip-alerts-btn" onClick={toggleAl} className={`ev-toolbtn relative ${alOpen ? 'on' : ''}`}>
+    
+    <button 
+      type="button" 
+      title="Alarmlar" 
+      data-testid="strip-alerts-btn" 
+      onClick={toggleAl} 
+      className={`ev-toolbtn relative ${alOpen ? 'on' : ''}`}
+    >
       <AlarmClock size={20} strokeWidth={1.5} />
       {activeCount > 0 && <span className="ev-badge" data-testid="strip-alerts-count">{activeCount}</span>}
+    </button>
+
+    <button 
+      type="button" 
+      title="Futures Data" 
+      data-testid="strip-futures-btn" 
+      onClick={toggleFd} 
+      className={`ev-toolbtn ${fdOpen ? 'on' : ''}`}
+    >
+      <Activity size={20} strokeWidth={1.5} />
     </button>
   </aside>
 );
