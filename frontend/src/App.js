@@ -21,7 +21,7 @@ import { FuturesModal } from './components/terminal/FuturesModal';
 
 const SidePanels = ({ L, set, alertsApi, pickSymbol, fdOpen, setFdOpen }) => {
   const dragW = useDrag((dx) => set((l) => ({ sideW: Math.min(1100, Math.max(260, l.sideW - dx)) })));
-  const dragH = useDrag((dx, dy) => set((l) => ({ alH: Math.min(window.innerHeight - 160, Math.max(100, l.alH - dy)) })));
+  const dragH = useDrag((dx, dy) => set((l) => ({ alH: Math.min(window.innerHeight - 160, Math.max(100, l.alH + dy)) })));
 
   if (!L.wlOpen && !L.alOpen && !fdOpen) return null;
 
