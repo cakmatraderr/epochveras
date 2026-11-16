@@ -3,6 +3,7 @@ import { X, RefreshCw } from 'lucide-react';
 
 export const FuturesModal = ({ symbol, onClose }) => {
   const [data, setData] = useState(null);
+  const [lsData, setLsData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -10,8 +11,21 @@ export const FuturesModal = ({ symbol, onClose }) => {
     const fetchFuturesData = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`).then(r => r.json());
-        if (alive) setData(res);
+        // Sembolü Binance futures formatına uyarla (örn: DOGEUSDT)
+        const cleanSymbol = symbol.replace('.P', '');
+        
+        // Premium Index (Funding Rate & Mark Price)
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.json());
+        
+        // Long/Short Ratio (Hesap Oranları)
+        const lsRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
+
+        if (alive) {
+          setData(res);
+          if (lsRes && lsRes.length > 0) {
+            setLsData(lsRes[0]);
+          }
+        }
       } catch (e) {
         console.error(e);
       } finally {
@@ -21,6 +35,10 @@ export const FuturesModal = ({ symbol, onClose }) => {
     fetchFuturesData();
     return () => { alive = false; };
   }, [symbol]);
+
+  // Long / Short yüzdelerini hesapla (Varsayılan olarak veri yoksa %50 / %50 göster)
+  const longRatio = lsData ? Number(lsData.longAccount) * 100 : 50.0;
+  const shortRatio = lsData ? Number(lsData.shortAccount) * 100 : 50.0;
 
   return (
     <div className="w-full bg-[#1e222d] border-l border-[#2a2e39] flex flex-col h-full text-[#d1d4dc]">
@@ -34,8 +52,11 @@ export const FuturesModal = ({ symbol, onClose }) => {
             onClick={async () => {
               setLoading(true);
               try {
-                const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`).then(r => r.json());
+                const cleanSymbol = symbol.replace('.P', '');
+                const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.json());
+                const lsRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
                 setData(res);
+                if (lsRes && lsRes.length > 0) setLsData(lsRes[0]);
               } catch (e) { console.error(e); }
               finally { setLoading(false); }
             }} 
@@ -55,28 +76,51 @@ export const FuturesModal = ({ symbol, onClose }) => {
           <div className="py-8 text-center text-[#787b86]">Yükleniyor...</div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
+            {/* Fonlama Oranı */}
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="text-[#787b86] mb-1">Fonlama Oranı (Funding)</div>
               <div className="text-sm font-semibold text-[#089981]">
                 {data?.lastFundingRate ? `${(Number(data.lastFundingRate) * 100).toFixed(4)}%` : '%0.0100'}
               </div>
             </div>
+
+            {/* Mark Fiyatı */}
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="text-[#787b86] mb-1">Mark Fiyatı</div>
               <div className="text-sm font-semibold text-[#fff]">
                 {data?.markPrice ? Number(data.markPrice).toFixed(4) : '-'}
               </div>
             </div>
-            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
-              <div className="text-[#787b86] mb-1">Long / Short Oranı (LS)</div>
-              <div className="text-sm font-semibold text-[#2962ff]">
-                %51.2 / %48.8
+
+            {/* Long / Short Görsel Bar Alanı (Tüm genişliği kaplasın) */}
+            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-[#787b86]">Long / Short Oranı (Hesap)</span>
+                <span className="font-semibold tabular-nums">
+                  <span className="text-[#089981]">%{longRegistry(longRatio)}</span> / <span className="text-[#f23645]">%{shortRegistry(shortRatio)}</span>
+                </span>
+              </div>
+              
+              {/* İki Renkli Görsel Bar */}
+              <div className="w-full h-2.5 bg-[#2a2e39] rounded-full overflow-hidden flex">
+                <div 
+                  className="h-full bg-[#089981] transition-all duration-500" 
+                  style={{ width: `${longRatio}%` }} 
+                  title={`Long: %${longRatio.toFixed(1)}`}
+                />
+                <div 
+                  className="h-full bg-[#f23645] transition-all duration-500" 
+                  style={{ width: `${shortRatio}%` }} 
+                  title={`Short: %${shortRatio.toFixed(1)}`}
+                />
               </div>
             </div>
-            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
-              <div className="text-[#787b86] mb-1">Açık Pozisyon (OI)</div>
+
+            {/* Açık Pozisyon Bilgisi */}
+            <div className="col-span-2 p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="text-[#787b86] mb-1">Açık Pozisyon (OI Durumu)</div>
               <div className="text-sm font-semibold text-[#ff9800]">
-                Aktif Takip
+                Binance Futures Canlı Takip Aktif
               </div>
             </div>
           </div>
@@ -85,3 +129,11 @@ export const FuturesModal = ({ symbol, onClose }) => {
     </div>
   );
 };
+
+// Yardımcı format fonksiyonları
+function longRegistry(val) {
+  return isNaN(val) ? '50.0' : val.toFixed(1);
+}
+function shortRegistry(val) {
+  return isNaN(val) ? '50.0' : val.toFixed(1);
+}
