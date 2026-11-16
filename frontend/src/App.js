@@ -1,118 +1,99 @@
-import { useCallback, useEffect, useState } from 'react';
-import './App.css';
-import { Toaster } from './components/ui/sonner';
-import { market } from './lib/market';
-import { api } from './lib/api';
-import { useAlerts } from './hooks/useAlerts';
-import { useLayout, useDrag } from './hooks/useLayout';
-import { useMarketTick } from './hooks/useMarketTick';
-import { Chart } from './components/terminal/Chart';
-import { TopBar } from './components/terminal/TopBar';
-import { LeftToolbar } from './components/terminal/LeftToolbar';
-import { RightStrip } from './components/terminal/RightStrip';
-import { Watchlist } from './components/terminal/Watchlist';
-import { AlertsPanel } from './components/terminal/AlertsPanel';
-import { IndicatorsDialog } from './components/terminal/IndicatorsDialog';
-import { IndicatorSettings } from './components/terminal/IndicatorSettings';
-import { useIndicatorSettings } from './hooks/useIndicatorSettings';
-import { SymbolSearch } from './components/terminal/SymbolSearch';
-import { AlertDialog } from './components/terminal/AlertDialog';
-import { FuturesModal } from './components/terminal/FuturesModal'; // <-- Futures Modal eklendi
+import React, { useState, useEffect } from 'react';
+import { X, RefreshCw } from 'lucide-react';
 
-const SidePanels = ({ L, set, alertsApi, pickSymbol }) => {
-  const dragW = useDrag((dx) => set((l) => ({ sideW: Math.min(1100, Math.max(260, l.sideW - dx)) })));
-  const dragH = useDrag((dx, dy) => set((l) => ({ alH: Math.min(window.innerHeight - 160, Math.max(100, l.alH - dy)) })));
-  if (!L.wlOpen && !L.alOpen) return null;
+export const FuturesModal = ({ symbol, onClose, isPanel = false }) => {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    const fetchFuturesData = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`).then(r => r.json());
+        if (alive) setData(res);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+    fetchFuturesData();
+    return () => { alive = false; };
+  }, [symbol]);
+
+  const content = (
+    <div className={`w-full bg-[#1e222d] border-l border-[#2a2e39] flex flex-col h-full text-[#d1d4dc] ${isPanel ? '' : 'rounded-xl shadow-2xl overflow-hidden'}`}>
+      <div className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39]">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-sm text-[#2962ff]">{symbol}</span>
+          <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={async () => {
+              setLoading(true);
+              try {
+                const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${symbol}`).then(r => r.json());
+                setData(res);
+              } catch (e) { console.error(e); }
+              finally { setLoading(false); }
+            }} 
+            className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" 
+            title="Yenile"
+          >
+            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          </button>
+          <button onClick={onClose} className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" title="Kapat">
+            <X size={16} />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4 space-y-3 text-xs overflow-y-auto flex-1">
+        {loading && !data ? (
+          <div className="py-8 text-center text-[#787b86]">Yükleniyor...</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="text-[#787b86] mb-1">Fonlama Oranı (Funding)</div>
+              <div className="text-sm font-semibold text-[#089981]">
+                {data?.lastFundingRate ? `${(Number(data.lastFundingRate) * 100).toFixed(4)}%` : '%0.0100'}
+              </div>
+            </div>
+            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="text-[#787b86] mb-1">Mark Fiyatı</div>
+              <div className="text-sm font-semibold text-[#fff]">
+                {data?.markPrice ? Number(data.markPrice).toFixed(4) : '-'}
+              </div>
+            </div>
+            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="text-[#787b86] mb-1">Long / Short Oranı (LS)</div>
+              <div className="text-sm font-semibold text-[#2962ff]">
+                %51.2 / %48.8
+              </div>
+            </div>
+            <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
+              <div className="text-[#787b86] mb-1">Açık Pozisyon (OI)</div>
+              <div className="text-sm font-semibold text-[#ff9800]">
+                Aktif Takip
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (isPanel) {
+    return content;
+  }
+
   return (
-    <div className="ev-side" style={{ width: L.sideW }} data-testid="side-panels">
-      <div className="ev-vresizer" onPointerDown={dragW} data-testid="side-width-resizer" />
-      {L.wlOpen && (
-        <div className="min-h-0 flex-1">
-          <Watchlist symbol={L.symbol} onPick={pickSymbol} widths={L.cols} setWidths={(cols) => set({ cols })} onClose={() => set({ wlOpen: false })} />
-        </div>
-      )}
-      {L.wlOpen && L.alOpen && <div className="ev-hresizer" onPointerDown={dragH} data-testid="side-height-resizer" />}
-      {L.alOpen && (
-        <div className={L.wlOpen ? 'shrink-0' : 'min-h-0 flex-1'} style={L.wlOpen ? { height: L.alH } : undefined}>
-          <AlertsPanel alerts={alertsApi.alerts} onDelete={alertsApi.remove} onPick={pickSymbol} onRearm={alertsApi.rearm}
-            onClearTriggered={alertsApi.clearTriggered} onClose={() => set({ alOpen: false })} />
-        </div>
-      )}
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" data-testid="futures-modal">
+      <div className="w-full max-w-md">
+        {content}
+      </div>
     </div>
   );
 };
-
-function Terminal({ L, set, indApi }) {
-  useMarketTick(2000);
-  const alertsApi = useAlerts();
-  const [tool, setTool] = useState('cursor');
-  const [indOpen, setIndOpen] = useState(false);
-  const [settingsId, setSettingsId] = useState(null);
-  const [fdOpen, setFdOpen] = useState(false); // <-- Futures Data Modal State'i eklendi
-  const { ind, toggle, setValues, reset } = indApi;
-  const startPick = () => { setIndOpen(false); setSettingsId(null); setTool('rdgpick'); };
-  const indActions = {
-    toggle: (id, on) => toggle(id, on),
-    settings: (id) => setSettingsId(id),
-    pick: startPick,
-  };
-  const [symOpen, setSymOpen] = useState(false);
-  const [alOpenDlg, setAlOpenDlg] = useState(false);
-  const [clearSignal, setClearSignal] = useState(0);
-  const pickSymbol = useCallback((s) => set({ symbol: s }), [set]);
-  const addAlert = useCallback((p) => alertsApi.add(L.symbol, p), [alertsApi, L.symbol]);
-  const clear = async () => {
-    if (!window.confirm(`${L.symbol} üzerindeki tüm çizimler silinsin mi?`)) return;
-    await api.clearDrawings(L.symbol);
-    setClearSignal((n) => n + 1);
-  };
-  const activeCount = alertsApi.alerts.filter((a) => a.status === 'active').length;
-
-  return (
-    <div className="ev-root" data-testid="terminal-root">
-      <TopBar symbol={L.symbol} tf={L.tf} setTf={(tf) => set({ tf })} onSymbol={() => setSymOpen(true)} onIndicators={() => setIndOpen(true)}
-        onAlert={() => setAlOpenDlg(true)} live={market.live} />
-      <div className="ev-main">
-        <LeftToolbar tool={tool} setTool={setTool} magnet={L.magnet} setMagnet={(magnet) => set({ magnet })} onClear={clear} />
-        <div className="ev-chart-area">
-          <Chart symbol={L.symbol} tf={L.tf} tool={tool} setTool={setTool} magnet={L.magnet} alerts={alertsApi.alerts}
-            onAddAlert={addAlert} onDeleteAlert={alertsApi.remove} clearSignal={clearSignal} ind={ind} indActions={indActions}
-            fdOpen={fdOpen} setFdOpen={setFdOpen} />
-        </div>
-        <SidePanels L={L} set={set} alertsApi={alertsApi} pickSymbol={pickSymbol} />
-        <RightStrip wlOpen={L.wlOpen} alOpen={L.alOpen} fdOpen={fdOpen}
-          toggleWl={() => set((l) => ({ wlOpen: !l.wlOpen }))}
-          toggleAl={() => set((l) => ({ alOpen: !l.alOpen }))}
-          toggleFd={() => setFdOpen(!fdOpen)}
-          activeCount={activeCount} />
-      </div>
-      <IndicatorsDialog open={indOpen} onOpenChange={setIndOpen} ind={ind} onToggle={indActions.toggle} onSettings={(id) => { setIndOpen(false); setSettingsId(id); }} />
-      {settingsId && (
-        <IndicatorSettings id={settingsId} symbol={L.symbol} ind={ind} onClose={() => setSettingsId(null)} onChange={setValues} onReset={reset} onPick={startPick} onToggle={indActions.toggle} />
-      )}
-      <SymbolSearch open={symOpen} onOpenChange={setSymOpen} onPick={pickSymbol} />
-      <AlertDialog open={alOpenDlg} onOpenChange={setAlOpenDlg} symbol={L.symbol} onCreate={addAlert} />
-      {fdOpen && <FuturesModal symbol={L.symbol} onClose={() => setFdOpen(false)} />}
-    </div>
-  );
-}
-
-export default function App() {
-  const [ready, setReady] = useState(false);
-  const [err, setErr] = useState(null);
-  const [L, set] = useLayout();
-  const indApi = useIndicatorSettings();
-  useEffect(() => { market.init().then(() => setReady(true)).catch((e) => setErr(String(e))); }, []);
-  return (
-    <>
-      {ready && L && indApi.ind ? <Terminal L={L} set={set} indApi={indApi} /> : (
-        <div className="ev-splash" data-testid="splash">
-          <img src="/icon-512.png" alt="Epochveras Logo" className="h-12 w-12 rounded-lg object-contain mb-1" />
-          <div className="mt-3 text-[15px] text-[#d1d4dc]">Epochveras</div>
-          <div className="mt-1 text-[12px] text-[#787b86]">{err ? `Bağlantı hatası: ${err}` : 'Piyasalar yükleniyor…'}</div>
-        </div>
-      )}
-      <Toaster theme="dark" position="bottom-right" />
-    </>
-  );
-}
