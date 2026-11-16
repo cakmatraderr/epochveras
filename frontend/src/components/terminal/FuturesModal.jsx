@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { X, RefreshCw, GripVertical } from 'lucide-react';
+import { X, RefreshCw } from 'lucide-react';
 import { market } from '../../lib/market';
 import { fmtVol } from '../../lib/format';
 
@@ -11,8 +11,11 @@ export const FuturesModal = ({ symbol, onClose }) => {
   // Panel yüksekliği için state
   const [panelHeight, setPanelHeight] = useState(320);
 
-  // Üst başlıktaki tutamaktan basıp sürükleyerek dikey boyutlandırma
+  // Üst başlığın tamamından tutup sürükleyerek dikey boyutlandırma
   const handlePointerDown = (e) => {
+    // Kapat veya yenile butonlarına tıklandığında sürüklemeyi tetikleme
+    if (e.target.closest('button')) return;
+
     e.target.setPointerCapture(e.pointerId);
     const startY = e.clientY;
     const startHeight = panelHeight;
@@ -103,22 +106,17 @@ export const FuturesModal = ({ symbol, onClose }) => {
       data-testid="futures-modal"
       style={{ height: `${panelHeight}px` }}
     >
-      {/* Üst Başlık ve Boyutlandırma Tutamacı */}
-      <div className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] shrink-0">
-        <div className="flex items-center gap-2">
+      {/* Üst Başlık (Tamamından tutup aşağı yukarı çekiştirebilirsin) */}
+      <div 
+        className="flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] shrink-0 cursor-ns-resize touch-none"
+        onPointerDown={handlePointerDown}
+        title="Boyutlandırmak için basıp sürükleyin"
+      >
+        <div className="flex items-center gap-2 pointer-events-none">
           <span className="font-semibold text-sm text-[#2962ff]">{symbol}</span>
           <span className="text-xs px-1.5 py-0.5 bg-[#2a2e39] text-[#787b86] rounded">Futures Metrics</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          {/* Boyutlandırma Sürükleme İkonu (Üst Başlıkta) */}
-          <div 
-            className="p-1 text-[#787b86] hover:text-[#fff] cursor-ns-resize transition-colors touch-none flex items-center"
-            onPointerDown={handlePointerDown}
-            title="Yüksekliği ayarlamak için basıp sürükleyin"
-          >
-            <GripVertical size={14} />
-          </div>
-
+        <div className="flex items-center gap-2">
           <button 
             type="button" 
             onClick={fetchFutures} 
@@ -127,7 +125,6 @@ export const FuturesModal = ({ symbol, onClose }) => {
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           </button>
-          
           <button type="button" className="p-1 text-[#787b86] hover:text-[#fff] transition-colors" onClick={onClose} data-testid="futures-close-btn" title="Kapat">
             <X size={16} />
           </button>
