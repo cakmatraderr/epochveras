@@ -16,27 +16,24 @@ export const FuturesPanel = ({ symbol, onClose }) => {
     try {
       const cleanSymbol = symbol.replace('.P', '');
 
-      // OI, L/S oranları ve Binance premium index (FR ve Mark Price için) verilerini çekiyoruz
-      const [oiRes, lsArr, premiumRes] = await Promise.all([
+      const [oiRes, lsArr] = await Promise.all([
         fetch(`/api/binance/openInterest?symbol=${symbol}`).then(r => r.ok ? r.json() : { openInterest: 0 }),
-        fetch(`/api/binance/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`).then(r => r.ok ? r.json() : []),
-        fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.ok ? r.json() : null).catch(() => null)
+        fetch(`/api/binance/globalLongShortAccountRatio?symbol=${symbol}&period=5m&limit=1`).then(r => r.ok ? r.json() : [])
       ]);
 
       const ls = Array.isArray(lsArr) && lsArr.length > 0 ? lsArr[0] : {};
       const longAcc = parseFloat(ls.longAccount || 0.5);
       const shortAcc = parseFloat(ls.shortAccount || 0.5);
       
-      const ticker = market.tickers[symbol] || market.tickers[cleanSymbol] || {};
-      const lastPrice = ticker.last || ticker.close || (premiumRes?.markPrice ? Number(premiumRes.markPrice) : 0);
-      const markPrice = premiumRes?.markPrice ? Number(premiumRes.markPrice) : lastPrice;
+      const ticker = market.tickers[symbol] || market.tickers[cleanSymbol] || market.tickers[symbol + '.P'] || {};
       
-      // Fonlama oranını öncelikle Binance API'den, yoksa market ticker'dan alıp yüzdeye çeviriyoruz
+      const lastPrice = ticker.last || ticker.close || ticker.price || 0;
+      const markPrice = ticker.markPrice || lastPrice;
+      
       let rawFr = 0;
-      if (premiumRes?.lastFundingRate) {
-        rawFr = Number(premiumRes.lastFundingRate) * 100;
-      } else if (ticker.fundingRate !== undefined) {
-        rawFr = Number(ticker.fundingRate) * 100;
+      const frVal = ticker.fundingRate !== undefined ? ticker.fundingRate : ticker.lastFundingRate;
+      if (frVal !== undefined && frVal !== null) {
+        rawFr = Number(frVal) * 100;
       }
       
       const oiCoin = parseFloat(oiRes.openInterest || 0);
@@ -59,15 +56,22 @@ export const FuturesPanel = ({ symbol, onClose }) => {
 
   useEffect(() => {
     let cancelled = false;
-    fetchData().then(() => {
-      if (cancelled) return;
-    });
-    return () => { cancelled = true; };
+    fetchData();
+    
+    const interval = setInterval(() => {
+      if (!cancelled) fetchData();
+    }, 5000);
+
+    return () => { 
+      cancelled = true; 
+      clearInterval(interval);
+    };
   }, [symbol, fetchData]);
 
   return (
-    <div className="ev-panel flex h-full flex-col bg-[#1e222d] text-[#d1d4dc]" data-testid="futures-panel">
-      <div className="ev-panel-title flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39]">
+    <div className="ev-panel flex flex-col bg-[#1e222d] text-[#d1d4dc] border-b border-[#2a2e39]" data-testid="futures-panel">
+      {/* Alarm paneliyle birebir aynı sınıfa sahip başlık (Üst çizgisinden sürükleme özelliğini tetikler) */}
+      <div className="ev-panel-title flex items-center justify-between px-4 py-3 bg-[#131722] border-b border-[#2a2e39] select-none shrink-0">
         <span>Futures Data <span className="text-[#787b86]">({symbol})</span></span>
         <div className="flex items-center gap-1">
           <button 
