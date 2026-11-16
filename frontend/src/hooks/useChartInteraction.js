@@ -3,6 +3,7 @@ import { geom, pointAt } from '../lib/chartGeom';
 import { renderDrawing, hitDrawing, renderRuler, renderAlarms, alarmHit, plusHit, renderPlus } from '../lib/drawings';
 import { api } from '../lib/api';
 import { renderIndicators, renderPick } from '../lib/indicators/render';
+import { tfInfo } from '../lib/format';
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`);
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -35,6 +36,65 @@ function findHit(R, g, x, y) {
     if (h) return { d: R.drawings[i], handle: h };
   }
   return null;
+}
+
+// Sağ fiyat ölçeği üzerinde çubuk kapanış geri sayımını çizen yardımcı fonksiyon
+function renderBarCountdown(ctx, R, g, tf) {
+  const bars = R.bars;
+  if (!bars || bars.length === 0) return;
+  
+  const lastBar = bars[bars.length - 1];
+  const info = tfInfo(tf);
+  const tfSeconds = info.sec || 60;
+  const barCloseTime = lastBar.time + tfSeconds * 1000;
+  const now = Date.now();
+  const diff = Math.floor((barCloseTime - now) / 1000);
+
+  if (diff <= 0) return;
+
+  const hrs = Math.floor(diff / 3600);
+  const mins = Math.floor((diff % 3600) / 60);
+  const secs = diff % 60;
+
+  let timeStr = '';
+  if (hrs > 0) {
+    timeStr = `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  } else {
+    timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  const text = `⏱ ${timeStr}`;
+  ctx.font = '11px -apple-system, BlinkMacSystemFont, "Trebuchet MS", Roboto, sans-serif';
+  const metrics = ctx.measureText(text);
+  const padX = 6;
+  const padY = 4;
+  const boxW = metrics.width + padX * 2;
+  const boxH = 20;
+
+  // Sağ fiyat ölçeği alanına konumlandır (g.paneW sağ tarafı, dikey olarak ortalama veya anlık fiyatın altı)
+  const x = g.paneW + 6;
+  const y = g.paneH / 2 + 40; // Anlık fiyat etiketinin hemen altı
+
+  ctx.save();
+  ctx.fillStyle = '#1e222d';
+  ctx.strokeStyle = '#2a2e39';
+  ctx.lineWidth = 1;
+  
+  // Arka plan kutusu
+  ctx.beginPath();
+  if (ctx.roundRect) {
+    ctx.roundRect(x, y, boxW, boxH, 3);
+  } else {
+    ctx.rect(x, y, boxW, boxH);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  // Geri sayım metni
+  ctx.fillStyle = '#FFEB3B';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + padX, y + boxH / 2);
+  ctx.restore();
 }
 
 export function useChartInteraction(R, wrap, canvas, cb) {
@@ -103,7 +163,6 @@ export function useChartInteraction(R, wrap, canvas, cb) {
         return true;
       }
       
-      // Boş bir yere tıklandığında seçimi temizle
       if (R.sel) {
         select(null);
         return true;
@@ -199,6 +258,9 @@ export function useChartInteraction(R, wrap, canvas, cb) {
       renderAlarms(ctx, R.alertTags || [], g, R.hoverAlarm);
       if (R.cross && R.cross.y < g.paneH && R.tool === 'cursor' && !R.hoverAlarm && !R.drag) renderPlus(ctx, R.cross, g, R.plusHover);
       ctx.restore();
+
+      // Sağ fiyat ölçeği üzerinde çubuk geri sayımını render et
+      renderBarCountdown(ctx, R, g, R.tf);
     };
     draw();
 
