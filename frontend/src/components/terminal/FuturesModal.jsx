@@ -19,16 +19,16 @@ export const FuturesModal = ({ symbol, onClose }) => {
         // 1. Premium Index (Funding Rate & Mark Price)
         const res = await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${cleanSymbol}`).then(r => r.json());
         
-        // 2. LS Account Ratio (Hesap Oranı)
+        // 2. LS Account Ratio
         const accRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
 
-        // 3. LS Position Ratio (Pozisyon Oranı)
+        // 3. LS Position Ratio
         const posRes = await fetch(`https://fapi.binance.com/futures/data/topLongShortPositionRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
 
-        // 4. Global Long/Short Ratio (Tüm hesaplar genel oranı)
+        // 4. Global Long/Short Ratio
         const globRes = await fetch(`https://fapi.binance.com/futures/data/globalLongShortAccountRatio?symbol=${cleanSymbol}&period=1h&limit=1`).then(r => r.json());
 
-        // 5. Open Interest (Açık Pozisyon)
+        // 5. Open Interest
         const oiRes = await fetch(`https://fapi.binance.com/fapi/v1/openInterest?symbol=${cleanSymbol}`).then(r => r.json());
 
         if (alive) {
@@ -48,7 +48,6 @@ export const FuturesModal = ({ symbol, onClose }) => {
     return () => { alive = false; };
   }, [symbol]);
 
-  // Yüzde hesaplama yardımcıları
   const getPct = (item) => {
     if (!item) return { long: 50, short: 50 };
     const l = Number(item.longAccount || item.longPosition || 0.5) * 100;
@@ -61,6 +60,10 @@ export const FuturesModal = ({ symbol, onClose }) => {
   const accPct = getPct(lsAccount);
   const posPct = getPct(lsPosition);
   const globPct = getPct(globalRatio);
+
+  // Fonlama oranını doğru yüzdeye çevir (Binance 0.0001 -> %0.01)
+  const rawFr = data?.lastFundingRate ? Number(data.lastFundingRate) * 100 : 0;
+  const markPriceVal = data?.markPrice ? Number(data.markPrice) : null;
 
   return (
     <div className="w-full bg-[#1e222d] border-l border-[#2a2e39] flex flex-col h-full text-[#d1d4dc]">
@@ -107,17 +110,17 @@ export const FuturesModal = ({ symbol, onClose }) => {
           <div className="grid grid-cols-2 gap-3">
             {/* Fonlama Oranı */}
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
-              <div className="text-[#787b86] mb-1">Fonlama Oranı (Funding)</div>
-              <div className="text-sm font-semibold text-[#089981]">
-                {data?.lastFundingRate ? `${(Number(data.lastFundingRate) * 100).toFixed(4)}%` : '%0.0100'}
+              <div className="text-[#787b86] mb-1">Fonlama Oranı (FR)</div>
+              <div className={`text-sm font-semibold tabular-nums ${rawFr >= 0 ? 'text-[#089981]' : 'text-[#f23645]'}`}>
+                {rawFr >= 0 ? `+${rawFr.toFixed(4)}%` : `${rawFr.toFixed(4)}%`}
               </div>
             </div>
 
             {/* Mark Fiyatı */}
             <div className="p-3 bg-[#131722] rounded-lg border border-[#2a2e39]">
               <div className="text-[#787b86] mb-1">Mark Fiyatı</div>
-              <div className="text-sm font-semibold text-[#fff]">
-                {data?.markPrice ? Number(data.markPrice).toFixed(4) : '-'}
+              <div className="text-sm font-semibold text-[#fff] tabular-nums">
+                {markPriceVal !== null ? (markPriceVal < 1 ? markPriceVal.toFixed(6) : markPriceVal.toFixed(2)) : '-'}
               </div>
             </div>
 
