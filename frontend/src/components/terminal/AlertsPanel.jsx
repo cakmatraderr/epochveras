@@ -1,53 +1,55 @@
-import { Trash2, X, BellRing, Bell } from 'lucide-react';
-import { market } from '../../lib/market';
-import { fmtPrice } from '../../lib/format';
+import { useState } from "react";
+import { Bell, BellRing, Trash2, Volume2, VolumeX, ArrowUp, ArrowDown, Send } from "lucide-react";
+import { toast } from "sonner";
+import { fmtPrice } from "../../lib/api";
+import { enablePush, pushSupported } from "../../lib/notify";
+import { http } from "../../lib/api";
 
-const AlertRow = ({ a, onDelete, onPick, onRearm }) => {
-  const prec = market.info[a.symbol]?.precision ?? 2;
-  const active = a.status === 'active';
-  return (
-    <div className="ev-alert-row group" data-testid={`alert-row-${a.id}`} onClick={() => onPick(a.symbol)}>
-      <div className={`mt-0.5 ${active ? 'text-[#ff9800]' : 'text-[#787b86]'}`}>{active ? <Bell size={15} /> : <BellRing size={15} />}</div>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13px] text-[#d1d4dc]">
-          <b>{a.symbol}</b> {a.direction === 'up' ? 'yukarı kesişim' : 'aşağı kesişim'} <b className="tabular-nums">{fmtPrice(a.price, prec)}</b>
-        </div>
-        <div className="text-[11px] text-[#787b86]">
-          {active ? 'Aktif' : `Tetiklendi · ${new Date(a.triggered_at).toLocaleString('tr-TR')}`}
-        </div>
+export default function AlarmsPanel({ alarms, symMap, onDelete, onClear, sound, setSound, onSelect }) {
+  const [pushOn, setPushOn] = useState(pushSupported() && Notification.permission === "granted");
+  const active = alarms.filter((a) => a.status === "active");
+  const done = alarms.filter((a) => a.status === "triggered");
+  const turnOn = async () => {
+    try { await enablePush(); setPushOn(true); toast.success("Push bildirimleri açıldı"); }
+    catch (e) { toast.error(e.message || "Push açılamadı"); }
+  };
+  const row = (a) => {
+    const p = symMap[a.symbol]?.precision ?? 2;
+    return (
+      <div key={a.id} className="group flex items-center gap-2 px-2 h-8 hover:bg-white/5 cursor-pointer text-[11px]" onClick={() => onSelect(a.symbol)} data-testid={`alarm-row-${a.id}`}>
+        {a.status === "active" ? <Bell size={12} className="text-[#F5A623]" /> : <BellRing size={12} className="text-[#787B86]" />}
+        <span className="font-semibold text-[#E0E3EB] w-24 truncate">{a.symbol}</span>
+        {a.direction === "up" ? <ArrowUp size={11} className="text-[#089981]" /> : <ArrowDown size={11} className="text-[#F23645]" />}
+        <span className="font-mono-num text-[#E0E3EB] flex-1 text-right">{fmtPrice(a.price, p)}</span>
+        {a.status === "triggered" && <span className="font-mono-num text-[10px] text-[#787B86]">{new Date(a.triggered_at).toLocaleTimeString("tr-TR")}</span>}
+        <button onClick={(e) => { e.stopPropagation(); onDelete(a.id); }} className="opacity-60 group-hover:opacity-100 text-[#787B86] hover:text-[#F23645]" data-testid={`alarm-delete-${a.id}`}><Trash2 size={12} /></button>
       </div>
-      {!active && (
-        <button type="button" className="ev-iconbtn text-[11px]" data-testid={`alert-rearm-${a.id}`} onClick={(e) => { e.stopPropagation(); onRearm(a); }}>Yenile</button>
-      )}
-      <button type="button" className="ev-iconbtn hover:text-[#f23645]" data-testid={`alert-delete-${a.id}`} onClick={(e) => { e.stopPropagation(); onDelete(a.id); }}>
-        <Trash2 size={14} />
-      </button>
-    </div>
-  );
-};
-
-export const AlertsPanel = ({ alerts, onDelete, onPick, onRearm, onClose, onClearTriggered }) => {
-  const active = alerts.filter((a) => a.status === 'active');
-  const done = alerts.filter((a) => a.status !== 'active');
+    );
+  };
   return (
-    <div className="ev-panel flex h-full flex-col" data-testid="alerts-panel">
-      <div className="ev-panel-title">
-        <span>Alarmlar <span className="text-[#787b86]">({active.length})</span></span>
-        <div className="flex items-center gap-1">
-          {done.length > 0 && (
-            <button type="button" className="ev-iconbtn text-[11px]" onClick={onClearTriggered} data-testid="alerts-clear-triggered-btn">Tetiklenenleri temizle</button>
-          )}
-          <button type="button" className="ev-iconbtn" onClick={onClose} data-testid="alerts-close-btn"><X size={16} /></button>
-        </div>
+    <div className="h-full flex flex-col" data-testid="alarms-panel">
+      <div className="flex items-center gap-1 px-2 h-8 border-b border-white/[0.06] shrink-0">
+        <button onClick={() => setSound(!sound)} className={`h-6 px-1.5 flex items-center gap-1 text-[10px] rounded-sm ${sound ? "text-[#E0E3EB]" : "text-[#787B86]"} hover:bg-white/5`} data-testid="alarm-sound-toggle">
+          {sound ? <Volume2 size={12} /> : <VolumeX size={12} />} Ses
+        </button>
+        {pushOn ? (
+          <button onClick={() => http.post("/push/test").then(() => toast("Test bildirimi gönderildi"))} className="h-6 px-1.5 flex items-center gap-1 text-[10px] text-[#089981] hover:bg-white/5 rounded-sm" data-testid="push-test-button"><Send size={11} /> Push aktif · test</button>
+        ) : (
+          <button onClick={turnOn} className="h-6 px-1.5 flex items-center gap-1 text-[10px] text-white hover:bg-white/5 rounded-sm" data-testid="push-enable-button"><BellRing size={11} /> Push aç</button>
+        )}
+        <div className="flex-1" />
+        {done.length > 0 && <button onClick={onClear} className="text-[10px] text-[#787B86] hover:text-[#F23645]" data-testid="alarm-clear-triggered">Geçmişi temizle</button>}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto" data-testid="alerts-list">
-        {!alerts.length && (
-          <div className="px-4 py-6 text-center text-[12px] leading-5 text-[#787b86]" data-testid="alerts-empty">
-            Henüz alarm yok. Grafikte fiyat ölçeğinin yanındaki <b className="text-[#d1d4dc]">+</b> butonuna tıklayarak tek tıkla alarm kurabilirsiniz.
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {active.length === 0 && (
+          <div className="px-3 py-3 text-[11px] text-[#787B86] leading-relaxed" data-testid="alarms-empty">
+            Aktif alarm yok. Grafikte fiyat ölçeğinin yanında beliren <span className="inline-flex h-4 w-4 items-center justify-center bg-[#D1D4DC] text-black rounded-sm align-middle">+</span> ile alarm ekleyin.
           </div>
         )}
-        {[...active, ...done].map((a) => <AlertRow key={a.id} a={a} onDelete={onDelete} onPick={onPick} onRearm={onRearm} />)}
+        {active.map(row)}
+        {done.length > 0 && <div className="px-2 pt-2 pb-1 text-[10px] uppercase tracking-wider text-[#434651]">Tetiklenenler</div>}
+        {done.map(row)}
       </div>
     </div>
   );
-};
+}
