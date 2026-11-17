@@ -1,263 +1,210 @@
-import asyncio
 import os
-import time
-import logging
 import uuid
-import json
-from contextlib import suppress
+import asyncio
+import logging
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
-
-import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, APIRouter, HTTPException, Request, Body
-from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, ConfigDict, Field
-from pymongo import ASCENDING, IndexModel
+
+load_dotenv(Path(__file__).parent / ".env")
+
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Header
 from starlette.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field
 
-# Web Push için pywebpush kütüphanesi
 try:
-    from pywebpush import webpush, WebPushException
-except ImportError:
-    webpush = None
+    from backend.clerk_auth import clerk_router, require_user, verify_session_token
+    from backend.market import router as market_router, last_prices
+    from backend.alarms import Hub, AlarmEngine
+except ModuleNotFoundError:
+    from clerk_auth import clerk_router, require_user, verify_session_token
+    from market import router as market_router, last_prices
+    from alarms import Hub, AlarmEngine
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-
-client = AsyncIOMotorClient(os.environ['MONGO_URL'])
-db = client[os.environ['DB_NAME']]
-
-INDEXES: dict[str, list[IndexModel]] = {
-    "drawings": [
-        IndexModel([("id", ASCENDING)], name="id", unique=True),
-        IndexModel([("symbol", ASCENDING)], name="symbol"),
-    ],
-    "alerts": [IndexModel([("id", ASCENDING)], name="id", unique=True)],
-    "settings": [IndexModel([("key", ASCENDING)], name="key", unique=True)],
-    "push_subscriptions": [IndexModel([("endpoint", ASCENDING)], name="endpoint", unique=True)],
-}
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
-
-
-async def ensure_indexes() -> None:
-    for collection, models in INDEXES.items():
-        for model in models:
-            try:
-                await db[collection].create_indexes([model])
-            except Exception as exc:
-                logger.error("ensure_indexes(%s.%s): %s", collection, model.document["name"], exc)
-
-
+logging.basicConfig(level=logging.INFO)
+client = AsyncIOMotorClient(os.environ["MONGO_URL"])
+db = client[os.environ["DB_NAME"]]
 app = FastAPI()
 api = APIRouter(prefix="/api")
+hub = Hub()
+engine = AlarmEngine(db, hub)
 
-# ---------- Binance proxy (fallback when browser cannot reach Binance directly) ----------
-BINANCE_BASE = "https://www.binance.com/fapi/v1/"
-ALLOWED = {"exchangeInfo": 600, "klines": 0, "ticker/24hr": 2, "premiumIndex": 3, "fundingInfo": 600}
-_cache: Dict[str, tuple] = {}
-_http: Optional[httpx.AsyncClient] = None
+SETTING_KEYS = {"layout", "favorites", "drawing_styles", "indicators", "last_symbol", "last_tf", "sound"}
 
 
-@api.get("/binance/{path:path}")
-async def binance_proxy(path: str, request: Request):
-    if path not in ALLOWED:
-        raise HTTPException(404, "not allowed")
-    params = dict(request.query_params)
-    key = path + "?" + "&".join(f"{k}={v}" for k, v in sorted(params.items()))
-    ttl = ALLOWED[path]
-    hit = _cache.get(key)
-    if ttl and hit and time.time() - hit[0] < ttl:
-        return hit[1]
-    try:
-        r = await _http.get(BINANCE_BASE + path, params=params)
-    except httpx.HTTPError as exc:
-        raise HTTPException(502, f"binance unreachable: {exc}")
-    if r.status_code != 200:
-        raise HTTPException(r.status_code, r.text[:200])
-    data = r.json()
-    if ttl:
-        _cache[key] = (time.time(), data)
-    return data
+def now():
+    return datetime.now(timezone.utc).isoformat()
 
 
-# ---------- Models ----------
+class Point(BaseModel):
+    time: float
+    price: float
+
+
 class Drawing(BaseModel):
-    model_config = ConfigDict(extra="allow")
-    id: str
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     symbol: str
     type: str
+    points: List[Point]
+    style: Dict[str, Any] = {}
 
 
-class AlertIn(BaseModel):
+class AlarmIn(BaseModel):
     symbol: str
     price: float
-    direction: str
-    message: str = ""
+    price_str: Optional[str] = None
 
 
-class Alert(AlertIn):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    status: str = "active"
-    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    triggered_at: Optional[str] = None
-
-
-class AlertPatch(BaseModel):
-    status: Optional[str] = None
-    price: Optional[float] = None
-    direction: Optional[str] = None
-    triggered_at: Optional[str] = None
-
-
-class SettingIn(BaseModel):
-    value: Any
-
-
-class PushSubscriptionModel(BaseModel):
-    endpoint: str
-    keys: dict
-
-
-# ---------- Drawings ----------
-@api.get("/drawings")
-async def list_drawings(symbol: str) -> List[dict]:
-    return await db.drawings.find({"symbol": symbol}, {"_id": 0}).to_list(2000)
-
-
-@api.put("/drawings/{did}")
-async def upsert_drawing(did: str, d: Drawing):
-    doc = d.model_dump()
-    doc["id"] = did
-    await db.drawings.replace_one({"id": did}, doc, upsert=True)
-    return doc
-
-
-@api.delete("/drawings/{did}")
-async def delete_drawing(did: str):
-    await db.drawings.delete_one({"id": did})
-    return {"ok": True}
-
-
-@api.delete("/drawings")
-async def clear_drawings(symbol: str):
-    res = await db.drawings.delete_many({"symbol": symbol})
-    return {"deleted": res.deleted_count}
-
-
-# ---------- Alerts ----------
-@api.get("/alerts")
-async def list_alerts() -> List[dict]:
-    return await db.alerts.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
-
-
-@api.post("/alerts")
-async def create_alert(a: AlertIn):
-    alert = Alert(**a.model_dump())
-    await db.alerts.insert_one(alert.model_dump())
-    return alert
-
-
-@api.patch("/alerts/{aid}")
-async def patch_alert(aid: str, p: AlertPatch):
-    upd = {k: v for k, v in p.model_dump().items() if v is not None}
-    doc = await db.alerts.find_one_and_update({"id": aid}, {"$set": upd}, projection={"_id": 0}, return_document=True)
-    if not doc:
-        raise HTTPException(404, "not found")
-    return doc
-
-
-@api.delete("/alerts/{aid}")
-async def delete_alert(aid: str):
-    await db.alerts.delete_one({"id": aid})
-    return {"ok": True}
-
-
-# ---------- Settings ----------
-@api.get("/settings/{key}")
-async def get_setting(key: str):
-    doc = await db.settings.find_one({"key": key}, {"_id": 0})
-    return {"key": key, "value": doc["value"] if doc else None}
-
-
-@api.put("/settings/{key}")
-async def put_setting(key: str, s: SettingIn):
-    await db.settings.replace_one({"key": key}, {"key": key, "value": s.value}, upsert=True)
-    return {"key": key, "value": s.value}
-
-
-# ---------- Web Push Endpoints ----------
-# VAPID anahtarları (Çevre değişkenlerinden alınır, tırnak/boşluk kalıntıları temizlenir)
-VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjBJuBkr3qBUYIHBQFLXYp5Nks8Wk").strip().strip('"\'')
-VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "your_private_key_here").strip().strip('"\'')
-VAPID_CLAIMS = {"sub": "mailto:admin@epochveras.com"}
-
-
-@api.get("/push/public-key")
-async def get_vapid_public_key():
-    return {"public_key": VAPID_PUBLIC_KEY}
-
-
-@api.post("/push/subscribe")
-async def subscribe_push(sub: PushSubscriptionModel):
-    doc = sub.model_dump()
-    await db.push_subscriptions.replace_one({"endpoint": sub.endpoint}, doc, upsert=True)
-    return {"status": "success", "message": "Bildirim aboneliği kaydedildi."}
-
-
-@api.post("/push/send-test")
-async def send_test_notification(payload: dict = Body(...)):
-    if not webpush:
-        raise HTTPException(status_code=500, detail="pywebpush kütüphanesi sunucuda yüklü değil.")
-    
-    message = payload.get("message", "Epochveras test bildirimi başarılı!")
-    subscriptions = await db.push_subscriptions.find({}, {"_id": 0}).to_list(1000)
-    
-    results = []
-    for sub in subscriptions:
-        try:
-            webpush(
-                subscription_info=sub,
-                data=json.dumps({"title": "Epochveras Terminal", "body": message}),
-                vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims=VAPID_CLAIMS
-            )
-            results.append({"endpoint": sub["endpoint"], "status": "sent"})
-        except Exception as e:
-            results.append({"endpoint": sub["endpoint"], "error": str(e)})
-            
-    return {"status": "completed", "results": results}
+class PushSub(BaseModel):
+    subscription: Dict[str, Any]
 
 
 @api.get("/")
 async def root():
-    return {"message": "Epochveras API"}
+    return {"app": "Epochveras", "ok": True}
+
+
+@api.get("/settings")
+async def get_settings(user=Depends(require_user)):
+    doc = await db.settings.find_one({"user_id": user["user_id"]}, {"_id": 0}) or {}
+    return {k: doc.get(k) for k in SETTING_KEYS}
+
+
+@api.patch("/settings")
+async def patch_settings(body: Dict[str, Any], user=Depends(require_user), x_client_id: str = Header(default="")):
+    upd = {k: v for k, v in body.items() if k in SETTING_KEYS}
+    if not upd:
+        raise HTTPException(400, "No valid keys")
+    await db.settings.update_one({"user_id": user["user_id"]}, {"$set": {**upd, "updated_at": now()}}, upsert=True)
+    await hub.send(user["user_id"], {"type": "settings", "keys": list(upd)}, exclude=x_client_id)
+    return {"ok": True}
+
+
+@api.get("/drawings")
+async def list_drawings(symbol: str, user=Depends(require_user)):
+    return await db.drawings.find({"user_id": user["user_id"], "symbol": symbol.upper()}, {"_id": 0, "user_id": 0}).to_list(2000)
+
+
+@api.put("/drawings/{did}")
+async def upsert_drawing(did: str, d: Drawing, user=Depends(require_user), x_client_id: str = Header(default="")):
+    doc = {**d.model_dump(), "id": did, "symbol": d.symbol.upper()}
+    other = await db.drawings.find_one({"id": did}, {"_id": 0, "user_id": 1})
+    if other and other["user_id"] != user["user_id"]:
+        raise HTTPException(403, "Not allowed")
+    await db.drawings.update_one({"id": did, "user_id": user["user_id"]},
+                                 {"$set": {**doc, "updated_at": now()}, "$setOnInsert": {"user_id": user["user_id"]}}, upsert=True)
+    await hub.send(user["user_id"], {"type": "drawing_upsert", "drawing": doc}, exclude=x_client_id)
+    return doc
+
+
+@api.delete("/drawings/{did}")
+async def delete_drawing(did: str, user=Depends(require_user), x_client_id: str = Header(default="")):
+    d = await db.drawings.find_one_and_delete({"id": did, "user_id": user["user_id"]})
+    if not d:
+        raise HTTPException(404, "Not found")
+    await hub.send(user["user_id"], {"type": "drawing_delete", "id": did, "symbol": d["symbol"]}, exclude=x_client_id)
+    return {"ok": True}
+
+
+@api.get("/alarms")
+async def list_alarms(user=Depends(require_user)):
+    return await db.alarms.find({"user_id": user["user_id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+
+
+@api.post("/alarms")
+async def create_alarm(a: AlarmIn, user=Depends(require_user)):
+    sym = a.symbol.upper()
+    cur = engine.prices.get(sym) if engine.ws and sym in engine.subscribed else None
+    if cur is None:
+        cur = (await last_prices()).get(sym)
+    if cur is None:
+        raise HTTPException(400, "Unknown symbol")
+    if a.price <= 0:
+        raise HTTPException(400, "Invalid price")
+    doc = {"id": str(uuid.uuid4()), "user_id": user["user_id"], "symbol": sym, "price": a.price,
+           "price_str": a.price_str or str(a.price), "direction": "up" if a.price > cur else "down",
+           "created_price": cur, "type": "last_price", "status": "active", "created_at": now()}
+    await db.alarms.insert_one({**doc})
+    engine.add(doc)
+    await hub.send(user["user_id"], {"type": "alarms"})
+    return doc
+
+
+@api.delete("/alarms/{aid}")
+async def delete_alarm(aid: str, user=Depends(require_user)):
+    a = await db.alarms.find_one_and_delete({"id": aid, "user_id": user["user_id"]}, {"_id": 0})
+    if not a:
+        raise HTTPException(404, "Not found")
+    engine.remove(a)
+    await hub.send(user["user_id"], {"type": "alarms"})
+    return {"ok": True}
+
+
+@api.delete("/alarms")
+async def clear_triggered(user=Depends(require_user)):
+    await db.alarms.delete_many({"user_id": user["user_id"], "status": "triggered"})
+    await hub.send(user["user_id"], {"type": "alarms"})
+    return {"ok": True}
+
+
+@api.get("/push/vapid")
+async def vapid():
+    return {"key": os.environ["VAPID_PUBLIC_KEY"]}
+
+
+@api.post("/push/subscribe")
+async def subscribe(body: PushSub, user=Depends(require_user)):
+    ep = body.subscription.get("endpoint")
+    if not ep:
+        raise HTTPException(400, "Invalid subscription")
+    await db.push_subs.update_one({"endpoint": ep}, {"$set": {"endpoint": ep, "user_id": user["user_id"],
+                                  "subscription": body.subscription, "updated_at": now()}}, upsert=True)
+    return {"ok": True}
+
+
+@api.post("/push/test")
+async def push_test(user=Depends(require_user)):
+    await engine.push(user["user_id"], {"title": "Epochveras", "body": "Push bildirimleri aktif", "tag": "test"})
+    return {"ok": True}
+
+
+@app.websocket("/api/ws")
+async def ws_endpoint(ws: WebSocket, token: str = "", client_id: str = ""):
+    try:
+        uid = verify_session_token(token)["sub"]
+    except Exception:
+        await ws.close(code=4401)
+        return
+    await ws.accept()
+    hub.add(uid, ws, client_id)
+    try:
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        hub.remove(uid, ws, client_id)
 
 
 app.include_router(api)
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.include_router(market_router)
+app.include_router(clerk_router)
+app.add_middleware(CORSMiddleware, allow_credentials=True, allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+                   allow_methods=["*"], allow_headers=["*"])
 
 
 @app.on_event("startup")
 async def startup():
-    global _http
-    _http = httpx.AsyncClient(timeout=20, headers={"User-Agent": "Mozilla/5.0"})
-    app.state.index_task = asyncio.create_task(ensure_indexes())
+    await db.alarms.create_index([("user_id", 1), ("status", 1)])
+    await db.drawings.create_index([("user_id", 1), ("symbol", 1)])
+    await db.drawings.create_index("id", unique=True)
+    await db.settings.create_index("user_id", unique=True)
+    app.state.engine_task = asyncio.create_task(engine.run())
 
 
 @app.on_event("shutdown")
 async def shutdown():
-    app.state.index_task.cancel()
-    with suppress(asyncio.CancelledError):
-        await app.state.index_task
-    await _http.aclose()
+    app.state.engine_task.cancel()
     client.close()
