@@ -3,6 +3,7 @@ import uuid
 import json
 import asyncio
 import logging
+import httpx
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -19,19 +20,15 @@ from pydantic import BaseModel, Field
 try:
     from backend.clerk_auth import clerk_router, require_user, verify_session_token
     from backend.market import router as market_router, last_prices
-    from backend.alarms import Hub, AlarmEngine
 except ModuleNotFoundError:
     from clerk_auth import clerk_router, require_user, verify_session_token
     from market import router as market_router, last_prices
-    from alarms import Hub, AlarmEngine
 
 logging.basicConfig(level=logging.INFO)
 client = AsyncIOMotorClient(os.environ["MONGO_URL"])
 db = client[os.environ["DB_NAME"]]
 app = FastAPI()
 api = APIRouter(prefix="/api")
-hub = Hub()
-engine = AlarmEngine(db, hub)
 
 SETTING_KEYS = {"layout", "favorites", "drawing_styles", "indicators", "last_symbol", "last_tf", "sound"}
 
@@ -40,8 +37,37 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+# --- WEBSOCKET YÖNETİCİSİ (HUB) ---
+class Hub:
+    def __init__(self):
+        self.connections: Dict[str, List[WebSocket]] = {}
+
+    def add(self, uid: str, ws: WebSocket, client_id: str = ""):
+        if uid not in self.connections:
+            self.connections[uid] = []
+        self.connections[uid].append(ws)
+
+    def remove(self, uid: str, ws: WebSocket, client_id: str = ""):
+        if uid in self.connections:
+            if ws in self.connections[uid]:
+                self.connections[uid].remove(ws)
+            if not self.connections[uid]:
+                del self.connections[uid]
+
+    async def send(self, uid: str, data: dict, exclude: str = ""):
+        if uid in self.connections:
+            for ws in self.connections[uid]:
+                try:
+                    await ws.send_json(data)
+                except:
+                    pass
+
+
+hub = Hub()
+
+
+# --- WEB PUSH BİLDİRİM FONKSİYONU ---
 async def send_web_push(user_id: str, title: str, body: str):
-    """Kullanıcının veritabanındaki tüm aktif push abonelerine web push bildirimi gönderir."""
     subs = await db.push_subs.find({"user_id": user_id}, {"_id": 0}).to_list(100)
     if not subs:
         return
@@ -68,6 +94,74 @@ async def send_web_push(user_id: str, title: str, body: str):
         except WebPushException as ex:
             if ex.response and ex.response.status_code in [404, 410]:
                 await db.push_subs.delete_one({"endpoint": subscription_info.get("endpoint")})
+
+
+# --- ARKA PLAN ALARM MOTORU (ALARMEGINE) ---
+class AlarmEngine:
+    def __init__(self, db, hub):
+        self.db = db
+        self.hub = hub
+        self.running = True
+
+    async def run(self):
+        """Arka planda sürekli çalışarak Binance fiyatlarını kontrol eder ve kapalıyken push atar."""
+        async with httpx.AsyncClient() as client_http:
+            while self.running:
+                try:
+                    active_alarms = await self.db.alarms.find({"status": "active"}).to_list(500)
+                    if not active_alarms:
+                        await asyncio.sleep(3)
+                        continue
+
+                    response = await client_http.get("https://fapi.binance.com/fapi/v1/ticker/price", timeout=5.0)
+                    if response.status_code != 200:
+                        await asyncio.sleep(3)
+                        continue
+                        
+                    data = response.json()
+                    price_map = {item["symbol"]: float(item["price"]) for item in data if "symbol" in item and "price" in item}
+
+                    for alarm in active_alarms:
+                        sym = alarm["symbol"]
+                        current_price = price_map.get(sym)
+                        if current_price is None:
+                            continue
+
+                        target_price = alarm["price"]
+                        direction = alarm["direction"]
+
+                        triggered = False
+                        if direction == "up" and current_price >= target_price:
+                            triggered = True
+                        elif direction == "down" and current_price <= target_price:
+                            triggered = True
+
+                        if triggered:
+                            triggered_at = datetime.now(timezone.utc).isoformat()
+                            
+                            # Veritabanında güncelle
+                            await self.db.alarms.update_one(
+                                {"id": alarm["id"]},
+                                {"$set": {"status": "triggered", "triggered_at": triggered_at}}
+                            )
+
+                            # Arayüz açıkse WebSocket ile bildir
+                            await self.hub.send(alarm["user_id"], {"type": "alarms"})
+
+                            # Tarayıcı kapalıyken cebine push bildirimi gönder
+                            await send_web_push(
+                                user_id=alarm["user_id"],
+                                title="Epochveras Alarm",
+                                body=f"{sym} alarm fiyatına ulaştı: {current_price}"
+                            )
+
+                except Exception as e:
+                    logging.error(f"AlarmEngine hata: {e}")
+                
+                await asyncio.sleep(3)
+
+
+engine = AlarmEngine(db, hub)
 
 
 class Point(BaseModel):
@@ -148,9 +242,7 @@ async def list_alarms(user=Depends(require_user)):
 @api.post("/alarms")
 async def create_alarm(a: AlarmIn, user=Depends(require_user)):
     sym = a.symbol.upper()
-    cur = engine.prices.get(sym) if engine.ws and sym in engine.subscribed else None
-    if cur is None:
-        cur = (await last_prices()).get(sym)
+    cur = (await last_prices()).get(sym)
     if cur is None:
         raise HTTPException(400, "Unknown symbol")
     if a.price <= 0:
@@ -159,7 +251,6 @@ async def create_alarm(a: AlarmIn, user=Depends(require_user)):
             "price_str": a.price_str or str(a.price), "direction": "up" if a.price > cur else "down",
             "created_price": cur, "type": "last_price", "status": "active", "created_at": now()}
     await db.alarms.insert_one({**doc})
-    engine.add(doc)
     await hub.send(user["user_id"], {"type": "alarms"})
     return doc
 
@@ -169,7 +260,6 @@ async def delete_alarm(aid: str, user=Depends(require_user)):
     a = await db.alarms.find_one_and_delete({"id": aid, "user_id": user["user_id"]}, {"_id": 0})
     if not a:
         raise HTTPException(404, "Not found")
-    engine.remove(a)
     await hub.send(user["user_id"], {"type": "alarms"})
     return {"ok": True}
 
@@ -198,7 +288,7 @@ async def subscribe(body: PushSub, user=Depends(require_user)):
 
 @api.post("/push/test")
 async def push_test(user=Depends(require_user)):
-    await engine.push(user["user_id"], {"title": "Epochveras", "body": "Push bildirimleri aktif", "tag": "test"})
+    await send_web_push(user["user_id"], "Epochveras", "Push bildirimleri aktif")
     return {"ok": True}
 
 
@@ -233,10 +323,12 @@ async def startup():
     await db.drawings.create_index([("user_id", 1), ("symbol", 1)])
     await db.drawings.create_index("id", unique=True)
     await db.settings.create_index("user_id", unique=True)
+    # Arka plan alarm motorunu başlatıyoruz
     app.state.engine_task = asyncio.create_task(engine.run())
 
 
 @app.on_event("shutdown")
 async def shutdown():
+    engine.running = False
     app.state.engine_task.cancel()
     client.close()
